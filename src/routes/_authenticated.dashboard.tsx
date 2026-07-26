@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { lazy, Suspense, useEffect, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { SiteHeader } from "@/components/SiteHeader";
@@ -17,14 +17,14 @@ const FindHelpModule = lazy(() =>
   import("@/components/modules/FindHelp").then((m) => ({ default: m.FindHelpModule })),
 );
 
-export const Route = createFileRoute("/dashboard")({
+export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({ meta: [{ title: "Dashboard · PoultryFit Kenya" }] }),
   component: Dashboard,
 });
 
 function Dashboard() {
   const { user, profile, ready } = useAuth();
-  const navigate = useNavigate();
+  
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   const fetchBylaw = useServerFn(getCountyBylaw);
@@ -36,9 +36,6 @@ function Dashboard() {
     staleTime: 5 * 60_000,
   });
 
-  useEffect(() => {
-    if (ready && user && !profile) navigate({ to: "/onboarding" });
-  }, [ready, user, profile, navigate]);
 
   if (!ready) return <div className="flex min-h-screen items-center justify-center text-muted-foreground">Loading…</div>;
   if (!user) {
