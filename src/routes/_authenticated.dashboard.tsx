@@ -17,7 +17,7 @@ const FindHelpModule = lazy(() =>
   import("@/components/modules/FindHelp").then((m) => ({ default: m.FindHelpModule })),
 );
 
-export const Route = createFileRoute("/dashboard")({
+export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({ meta: [{ title: "Dashboard · PoultryFit Kenya" }] }),
   component: Dashboard,
 });
