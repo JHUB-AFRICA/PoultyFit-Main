@@ -1,11 +1,9 @@
-// Data provider for vets and agrovets.
-// Today: reads from the bundled directory.
-// Tomorrow: swap the body of listVets() to fetch from the backend.
-// The rest of the app only imports listVets() so the swap stays local.
+// Data provider for vets and agrovets, backed by the `vets` table via a
+// public server function. FindHelpModule imports listVets() from here.
 
-import { VET_DIRECTORY, type VetContact } from "@/lib/poultry-data";
+import { listVetsFn, type VetRow } from "@/lib/vets.functions";
 
-export type { VetContact };
+export type VetContact = VetRow;
 
 export interface ListVetsOptions {
   county?: string;
@@ -13,8 +11,5 @@ export interface ListVetsOptions {
 }
 
 export async function listVets(opts: ListVetsOptions = {}): Promise<VetContact[]> {
-  let rows = VET_DIRECTORY;
-  if (opts.county) rows = rows.filter((v) => v.county === opts.county);
-  if (opts.kind) rows = rows.filter((v) => v.kind === opts.kind);
-  return rows;
+  return await listVetsFn({ data: opts });
 }
