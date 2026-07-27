@@ -1,10 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { MapContainer, TileLayer, Marker, Popup, CircleMarker, LayersControl } from "react-leaflet";
 import L from "leaflet";
-import { listVets, type VetContact } from "@/lib/data/vets";
+import { useServerFn } from "@tanstack/react-start";
+import { useQuery } from "@tanstack/react-query";
+import { listVetsFn, type VetRow } from "@/lib/vets.functions";
 import { haversineKm } from "@/lib/poultry-calc";
-import { Phone, MapPin, Stethoscope, Store } from "lucide-react";
+import { Phone, MapPin, Stethoscope, Store, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+type VetContact = VetRow;
 
 // Fix default marker icons for Vite
 delete (L.Icon.Default.prototype as unknown as { _getIconUrl?: unknown })._getIconUrl;
@@ -21,11 +25,13 @@ type Listed = VetContact & { distance: number };
 export function FindHelpModule({ county }: { county: string }) {
   const [filter, setFilter] = useState<"all" | "vet" | "agrovet">("all");
   const [me, setMe] = useState<{ lat: number; lng: number } | null>(null);
-  const [vets, setVets] = useState<VetContact[]>([]);
 
-  useEffect(() => {
-    listVets().then(setVets).catch(() => setVets([]));
-  }, []);
+  const fetchVets = useServerFn(listVetsFn);
+  const { data: vets = [], isLoading } = useQuery({
+    queryKey: ["vets", "all"],
+    queryFn: () => fetchVets({ data: {} }),
+    staleTime: 5 * 60_000,
+  });
 
   useEffect(() => {
     if (!navigator.geolocation) return;
