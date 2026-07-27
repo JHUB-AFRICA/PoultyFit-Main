@@ -151,7 +151,12 @@ export function FindHelpModule({ county }: { county: string }) {
               county={county}
             />
           )}
-          {list.length === 0 && (
+          {isLoading && (
+            <div className="flex items-center gap-2 rounded-xl border border-dashed border-border p-6 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" /> Loading nearby vets…
+            </div>
+          )}
+          {!isLoading && list.length === 0 && (
             <div className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
               No results found.
             </div>
