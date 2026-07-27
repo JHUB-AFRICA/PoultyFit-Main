@@ -258,6 +258,11 @@ export function HealthTriageModule() {
                 : <ShieldCheck className="h-4 w-4 text-primary" />}
               {result.urgency} urgency
             </div>
+            {result.source === "fallback" && (
+              <div className="mt-3 rounded-md border border-clay/30 bg-clay/5 px-3 py-2 text-[11px] uppercase tracking-wider text-clay">
+                Basic estimate — server unavailable, showing offline heuristic only.
+              </div>
+            )}
             <p className="mt-3 font-display text-xl">{result.conditionName}</p>
             <p className="mt-2 text-sm text-muted-foreground">{result.note}</p>
 
