@@ -52,6 +52,7 @@ function Dashboard() {
       </div>
     );
   }
+  // Load-bearing: prevents a one-frame content flash before _authenticated.tsx's redirect fires. Do not remove without adding null-handling in the layout too.
   if (!profile) return null;
 
   const feas = computeFeasibility(profile, bylaw ?? null);
