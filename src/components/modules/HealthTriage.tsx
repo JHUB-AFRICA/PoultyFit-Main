@@ -1,11 +1,22 @@
 import { useMemo, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
+import { useMutation } from "@tanstack/react-query";
 import { SYMPTOMS } from "@/lib/poultry-data";
 import { triage } from "@/lib/poultry-calc";
+import { predictDisease, type PredictDiseaseResult } from "@/lib/disease.functions";
 import { Button } from "@/components/ui/button";
 import { Camera, AlertTriangle, ShieldCheck, Stethoscope, Check, X, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type Phase = "asking" | "review" | "loading" | "done";
+
+interface DisplayResult {
+  urgency: "low" | "medium" | "high";
+  conditionName: string;
+  note: string;
+  confidencePct: number;
+  source: "server" | "fallback";
+}
 
 export function HealthTriageModule() {
   const [index, setIndex] = useState(0);
@@ -13,11 +24,40 @@ export function HealthTriageModule() {
   const [photo, setPhoto] = useState<string | null>(null);
   const [phase, setPhase] = useState<Phase>("asking");
   const [cardKey, setCardKey] = useState(0);
+  const [serverResult, setServerResult] = useState<PredictDiseaseResult | null>(null);
+  const [usedFallback, setUsedFallback] = useState(false);
 
-  const result = useMemo(
-    () => (phase === "done" ? triage(selected, !!photo) : null),
-    [phase, selected, photo],
-  );
+  const predictFn = useServerFn(predictDisease);
+  const mutation = useMutation({
+    mutationFn: (symptomLabels: string[]) => predictFn({ data: { symptoms: symptomLabels } }),
+    onSuccess: (res) => {
+      setServerResult(res);
+      setUsedFallback(false);
+      setPhase("done");
+    },
+    onError: () => {
+      setServerResult(null);
+      setUsedFallback(true);
+      setPhase("done");
+    },
+  });
+
+  const result = useMemo<DisplayResult | null>(() => {
+    if (phase !== "done") return null;
+    if (serverResult?.top) {
+      const t = serverResult.top;
+      return {
+        urgency: (t.urgency as "low" | "medium" | "high") ?? "medium",
+        conditionName: t.name,
+        note: serverResult.advice || t.treatment_notes || t.prevention || "See a vet for confirmation.",
+        confidencePct: Math.min(90, 40 + t.score * 15),
+        source: "server",
+      };
+    }
+    const fb = triage(selected, !!photo);
+    if (!fb) return null;
+    return { ...fb, source: "fallback" };
+  }, [phase, serverResult, selected, photo]);
 
   const current = SYMPTOMS[index];
   const total = SYMPTOMS.length;
@@ -47,8 +87,15 @@ export function HealthTriageModule() {
   };
 
   const runDiagnosis = () => {
+    if (selected.length === 0) {
+      setPhase("done");
+      return;
+    }
     setPhase("loading");
-    setTimeout(() => setPhase("done"), 1600);
+    const labels = selected
+      .map((id) => SYMPTOMS.find((s) => s.id === id)?.label)
+      .filter((l): l is string => !!l);
+    mutation.mutate(labels);
   };
 
   const restart = () => {
@@ -56,6 +103,8 @@ export function HealthTriageModule() {
     setPhoto(null);
     setIndex(0);
     setCardKey((k) => k + 1);
+    setServerResult(null);
+    setUsedFallback(false);
     setPhase("asking");
   };
 
@@ -209,6 +258,11 @@ export function HealthTriageModule() {
                 : <ShieldCheck className="h-4 w-4 text-primary" />}
               {result.urgency} urgency
             </div>
+            {result.source === "fallback" && (
+              <div className="mt-3 rounded-md border border-clay/30 bg-clay/5 px-3 py-2 text-[11px] uppercase tracking-wider text-clay">
+                Basic estimate — server unavailable, showing offline heuristic only.
+              </div>
+            )}
             <p className="mt-3 font-display text-xl">{result.conditionName}</p>
             <p className="mt-2 text-sm text-muted-foreground">{result.note}</p>
 
