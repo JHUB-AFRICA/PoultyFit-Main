@@ -267,6 +267,60 @@ export type Database = {
         }
         Relationships: []
       }
+      feed_products: {
+        Row: {
+          agrovet_name: string | null
+          brand: string | null
+          category: string
+          county: string | null
+          created_at: string
+          goal: string
+          id: string
+          notes: string | null
+          poultry_type: string
+          price_kes: number
+          product_name: string
+          source: string | null
+          stage: string
+          unit_size: string
+          updated_at: string
+        }
+        Insert: {
+          agrovet_name?: string | null
+          brand?: string | null
+          category?: string
+          county?: string | null
+          created_at?: string
+          goal: string
+          id?: string
+          notes?: string | null
+          poultry_type: string
+          price_kes: number
+          product_name: string
+          source?: string | null
+          stage: string
+          unit_size?: string
+          updated_at?: string
+        }
+        Update: {
+          agrovet_name?: string | null
+          brand?: string | null
+          category?: string
+          county?: string | null
+          created_at?: string
+          goal?: string
+          id?: string
+          notes?: string | null
+          poultry_type?: string
+          price_kes?: number
+          product_name?: string
+          source?: string | null
+          stage?: string
+          unit_size?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       poultry_types: {
         Row: {
           created_at: string
