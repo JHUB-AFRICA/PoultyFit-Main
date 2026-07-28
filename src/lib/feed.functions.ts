@@ -60,24 +60,36 @@ function makeClient() {
 /**
  * Public-read list of commercial feed products for a given poultry type.
  * Falls back to poultry_type='chicken' when the requested type has no rows
- * (turkey, goose, quail, guinea-fowl are not yet stocked).
+ * (turkey, goose, quail, guinea-fowl are not yet stocked). Also falls back
+ * from a county-specific price to the national baseline (county IS NULL)
+ * when no county-specific row exists yet.
  */
 export const getFeedProducts = createServerFn({ method: "GET" })
   .inputValidator((input: unknown) => ProductsInput.parse(input))
   .handler(async ({ data }): Promise<FeedProduct[]> => {
     const client = makeClient();
 
-    const run = async (poultryType: string) => {
+    const run = async (poultryType: string, county?: string) => {
       let q = client.from("feed_products").select("*").eq("poultry_type", poultryType);
       if (data.goal) q = q.eq("goal", data.goal);
       if (data.stage) q = q.eq("stage", data.stage);
-      if (data.county) q = q.eq("county", data.county);
+      q = county ? q.eq("county", county) : q.is("county", null);
       const { data: rows } = await q;
       return rows ?? [];
     };
 
-    let rows = await run(data.poultryType);
+    // 1. requested poultry type + county-specific price, if any
+    let rows = data.county ? await run(data.poultryType, data.county) : [];
+    // 2. requested poultry type + national baseline (county IS NULL)
+    if (rows.length === 0) rows = await run(data.poultryType);
+
     let fallback = false;
+    // 3. chicken + county-specific price, if any
+    if (rows.length === 0 && data.poultryType !== "chicken") {
+      rows = data.county ? await run("chicken", data.county) : [];
+      fallback = true;
+    }
+    // 4. chicken + national baseline
     if (rows.length === 0 && data.poultryType !== "chicken") {
       rows = await run("chicken");
       fallback = true;
