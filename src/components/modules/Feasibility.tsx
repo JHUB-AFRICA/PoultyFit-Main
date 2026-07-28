@@ -2,11 +2,11 @@ import { useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
 import { computeFeasibility } from "@/lib/poultry-calc";
-import { getCountyBylaw, type CountyBylawRow } from "@/lib/bylaws.functions";
+import { getCountyBylaw, type CountyBylawResult } from "@/lib/bylaws.functions";
 import { saveFeasibilityReport } from "@/lib/reports.functions";
 import { SPACE_PER_BIRD, STARTUP_COST_PER_BIRD } from "@/lib/poultry-data";
 import type { FarmerProfile } from "@/lib/auth";
-import { Ruler, Wallet, Scale, ShieldCheck, ShieldAlert, Ruler as RulerIcon, Save, Check } from "lucide-react";
+import { Ruler, Wallet, Scale, ShieldCheck, ShieldAlert, Ruler as RulerIcon, Save, Check, BookOpen, Globe } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -15,14 +15,18 @@ export function FeasibilityModule({ profile }: { profile: FarmerProfile }) {
   const saveReport = useServerFn(saveFeasibilityReport);
   const [isSaving, setIsSaving] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
-  const { data: bylaw, isLoading } = useQuery({
+
+  const { data: bylawResult, isLoading } = useQuery({
     queryKey: ["county_bylaw", profile.county, profile.ward ?? null],
     queryFn: () =>
       fetchBylaw({ data: { county: profile.county, sub_county: profile.ward || undefined } }),
     staleTime: 5 * 60_000,
   });
 
-  const result = useMemo(() => computeFeasibility(profile, bylaw ?? null), [profile, bylaw]);
+  const result = useMemo(
+    () => computeFeasibility(profile, bylawResult?.countyBylaw ?? null),
+    [profile, bylawResult]
+  );
   const perBird = SPACE_PER_BIRD[profile.housing];
 
   const handleSave = async () => {
@@ -52,6 +56,7 @@ export function FeasibilityModule({ profile }: { profile: FarmerProfile }) {
       <div className="grid gap-4 md:grid-cols-3">
         <div className="h-40 rounded-2xl bg-muted animate-pulse md:col-span-1" />
         <div className="h-40 rounded-2xl bg-muted animate-pulse md:col-span-2" />
+        <div className="h-40 rounded-2xl bg-muted animate-pulse md:col-span-3" />
       </div>
     );
   }
@@ -78,7 +83,7 @@ export function FeasibilityModule({ profile }: { profile: FarmerProfile }) {
           {isSaving ? (
             <>
               <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-              Saving…
+              Saving...
             </>
           ) : justSaved ? (
             <>
@@ -99,14 +104,14 @@ export function FeasibilityModule({ profile }: { profile: FarmerProfile }) {
           icon={Ruler}
           label="By space"
           value={result.maxBySpace}
-          hint={`${profile.lengthM && profile.widthM ? `${profile.lengthM}m × ${profile.widthM}m = ` : ""}${profile.spaceM2} m² ÷ ${perBird} m²/bird (${profile.housing.replace("-", " ")})`}
+          hint={`${profile.lengthM && profile.widthM ? `${profile.lengthM}m x ${profile.widthM}m = ` : ""}${profile.spaceM2} m2 / ${perBird} m2/bird (${profile.housing.replace("-", " ")})`}
           binding={result.bindingConstraint === "space"}
         />
         <Constraint
           icon={Wallet}
           label="By budget"
           value={result.maxByBudget}
-          hint={`KES ${profile.budgetKes.toLocaleString()} ÷ KES ${STARTUP_COST_PER_BIRD[profile.startingStage]}/bird (${stageLabel(profile.startingStage)})`}
+          hint={`KES ${profile.budgetKes.toLocaleString()} / KES ${STARTUP_COST_PER_BIRD[profile.startingStage]}/bird (${stageLabel(profile.startingStage)})`}
           binding={result.bindingConstraint === "budget"}
         />
         {result.maxByBylaw !== null && (
@@ -120,74 +125,150 @@ export function FeasibilityModule({ profile }: { profile: FarmerProfile }) {
         )}
       </div>
 
-      {bylaw && (
-        <div className="md:col-span-3">
-          <BylawCallout county={profile.county} bylaw={bylaw} />
-        </div>
-      )}
+      <div className="md:col-span-3">
+        <BylawCallout county={profile.county} bylawResult={bylawResult ?? null} />
+      </div>
     </div>
   );
 }
 
-function BylawCallout({ county, bylaw }: { county: string; bylaw: CountyBylawRow }) {
-  const warn = bylaw.permit_required;
-  return (
-    <div
-      className={cn(
-        "rounded-2xl border p-5",
-        warn ? "border-clay/40 bg-clay/5" : "border-primary/30 bg-primary/5",
-      )}
-    >
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <h3 className="font-display text-lg">{county} County</h3>
-          <span className="text-xs text-muted-foreground">local guidance</span>
+function BylawCallout({
+  county,
+  bylawResult,
+}: {
+  county: string;
+  bylawResult: CountyBylawResult | null;
+}) {
+  const bylaw = bylawResult?.countyBylaw ?? null;
+  const nationalRegulations = bylawResult?.nationalRegulations ?? [];
+  const hasSummary = bylaw?.bylaw_summary && bylaw.bylaw_summary.trim().length > 0;
+
+  if (hasSummary && bylaw) {
+    const warn = bylaw.permit_required;
+    return (
+      <div
+        className={cn(
+          "rounded-2xl border p-5",
+          warn ? "border-clay/40 bg-clay/5" : "border-primary/30 bg-primary/5",
+        )}
+      >
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <BookOpen className="h-4 w-4 text-muted-foreground" />
+            <h3 className="font-display text-lg">{county} County</h3>
+            <span className="text-xs text-muted-foreground">local guidance</span>
+          </div>
+          <span
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium",
+              warn ? "bg-clay/15 text-clay" : "bg-primary/15 text-primary",
+            )}
+          >
+            {warn ? <ShieldAlert className="h-3.5 w-3.5" /> : <ShieldCheck className="h-3.5 w-3.5" />}
+            {warn ? "Permit required" : "No permit needed"}
+          </span>
         </div>
-        <span
-          className={cn(
-            "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium",
-            warn ? "bg-clay/15 text-clay" : "bg-primary/15 text-primary",
-          )}
-        >
-          {warn ? <ShieldAlert className="h-3.5 w-3.5" /> : <ShieldCheck className="h-3.5 w-3.5" />}
-          {warn ? "Permit required" : "No permit needed"}
-        </span>
-      </div>
 
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        {bylaw.setback_meters !== null && (
-          <div className="rounded-xl border border-border/60 bg-background/60 p-3">
-            <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
-              <RulerIcon className="h-3.5 w-3.5" /> Setback from neighbour
-            </div>
-            <p className="mt-1 font-display text-xl">{bylaw.setback_meters} m</p>
-            <p className="text-xs text-muted-foreground">Minimum coop distance advised</p>
+        <p className="mt-4 text-sm text-foreground/80 leading-relaxed">{bylaw.bylaw_summary}</p>
+
+        {(bylaw.setback_meters !== null || bylaw.max_birds_residential !== null) && (
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            {bylaw.setback_meters !== null && (
+              <div className="rounded-xl border border-border/60 bg-background/60 p-3">
+                <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
+                  <RulerIcon className="h-3.5 w-3.5" /> Setback from neighbour
+                </div>
+                <p className="mt-1 font-display text-xl">{bylaw.setback_meters} m</p>
+                <p className="text-xs text-muted-foreground">Minimum coop distance advised</p>
+              </div>
+            )}
+            {bylaw.max_birds_residential !== null && (
+              <div className="rounded-xl border border-border/60 bg-background/60 p-3">
+                <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
+                  <Scale className="h-3.5 w-3.5" /> Urban backyard cap
+                </div>
+                <p className="mt-1 font-display text-xl">{bylaw.max_birds_residential} birds</p>
+                <p className="text-xs text-muted-foreground">Advisory maximum</p>
+              </div>
+            )}
           </div>
         )}
-        {bylaw.max_birds_residential !== null && (
-          <div className="rounded-xl border border-border/60 bg-background/60 p-3">
-            <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
-              <Scale className="h-3.5 w-3.5" /> Urban backyard cap
-            </div>
-            <p className="mt-1 font-display text-xl">{bylaw.max_birds_residential} birds</p>
-            <p className="text-xs text-muted-foreground">Advisory maximum</p>
-          </div>
+
+        {bylaw.source_url && (
+          <p className="mt-4 text-xs text-muted-foreground">
+            Source: {bylaw.source_url}
+          </p>
+        )}
+
+        {bylaw.notes && (
+          <p className="mt-2 text-xs text-muted-foreground italic">{bylaw.notes}</p>
         )}
       </div>
+    );
+  }
 
-      {bylaw.notes && <p className="mt-4 text-sm text-foreground/80">{bylaw.notes}</p>}
+  return (
+    <div className="rounded-2xl border border-border bg-card p-5">
+      <div className="flex items-center gap-2">
+        <Globe className="h-4 w-4 text-muted-foreground" />
+        <h3 className="font-display text-lg">{county} County</h3>
+        <span className="text-xs text-muted-foreground">local guidance</span>
+      </div>
+      <p className="mt-3 text-sm text-muted-foreground">
+        No specific bylaw has been recorded for {county} County. National regulations apply.
+      </p>
+
+      {nationalRegulations.length > 0 && (
+        <ul className="mt-4 grid gap-2 sm:grid-cols-2">
+          {nationalRegulations.map((reg) => (
+            <li
+              key={reg.id}
+              className="rounded-xl border border-border/60 bg-background/60 p-3"
+            >
+              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                {reg.category ?? "Regulation"}
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground italic">{reg.legal_instrument}</p>
+              {reg.requirement && (
+                <p className="mt-1 text-sm text-foreground/80 leading-relaxed">{reg.requirement}</p>
+              )}
+              {reg.source && (
+                <p className="mt-1 text-xs text-muted-foreground">{reg.source}</p>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
 
 function Constraint({
-  icon: Icon, label, value, hint, binding,
-}: { icon: React.ComponentType<{ className?: string }>; label: string; value: number; hint: string; binding: boolean }) {
+  icon: Icon,
+  label,
+  value,
+  hint,
+  binding,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  value: number;
+  hint: string;
+  binding: boolean;
+}) {
   return (
-    <div className={cn("flex items-center gap-4 rounded-2xl border p-4",
-      binding ? "border-primary bg-primary/5" : "border-border bg-card")}>
-      <div className={cn("flex h-10 w-10 items-center justify-center rounded-xl",
-        binding ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground")}>
+    <div
+      className={cn(
+        "flex items-center gap-4 rounded-2xl border p-4",
+        binding ? "border-primary bg-primary/5" : "border-border bg-card",
+      )}
+    >
+      <div
+        className={cn(
+          "flex h-10 w-10 items-center justify-center rounded-xl",
+          binding ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground",
+        )}
+      >
         <Icon className="h-5 w-5" />
       </div>
       <div className="flex-1">

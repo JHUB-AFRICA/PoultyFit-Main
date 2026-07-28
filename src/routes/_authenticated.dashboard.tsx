@@ -36,7 +36,6 @@ function Dashboard() {
     staleTime: 5 * 60_000,
   });
 
-
   if (!ready) return <div className="flex min-h-screen items-center justify-center text-muted-foreground">Loading…</div>;
   if (!user) {
     return (
@@ -55,7 +54,7 @@ function Dashboard() {
   // Load-bearing: prevents a one-frame content flash before _authenticated.tsx's redirect fires. Do not remove without adding null-handling in the layout too.
   if (!profile) return null;
 
-  const feas = computeFeasibility(profile, bylaw ?? null);
+  const feas = computeFeasibility(profile, bylaw?.countyBylaw ?? null);
 
   return (
     <div className="min-h-screen bg-background">
