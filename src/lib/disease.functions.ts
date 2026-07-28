@@ -7,6 +7,7 @@ import type { Database } from "@/integrations/supabase/types";
 const InputSchema = z.object({
   symptoms: z.array(z.string().min(1)).min(1).max(20),
   species: z.string().min(1).max(50).default("chicken"),
+  photoBase64: z.string().max(8_000_000).optional(),
 });
 
 interface DiseaseMatch {
@@ -35,7 +36,7 @@ export const predictDisease = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => InputSchema.parse(input))
   .handler(async ({ data, context }): Promise<PredictDiseaseResult> => {
-    const { symptoms, species } = data;
+    const { symptoms, species, photoBase64 } = data;
     const mlUrl = process.env.ML_SERVICE_URL;
     const mlKey = process.env.ML_SERVICE_API_KEY;
 
@@ -80,7 +81,11 @@ export const predictDisease = createServerFn({ method: "POST" })
             "content-type": "application/json",
             authorization: `Bearer ${mlKey}`,
           },
-          body: JSON.stringify({ symptoms, species }),
+          body: JSON.stringify({
+            symptoms,
+            species,
+            ...(photoBase64 ? { photo_base64: photoBase64 } : {}),
+          }),
         });
         if (res.ok) {
           mlPayload = await res.json();

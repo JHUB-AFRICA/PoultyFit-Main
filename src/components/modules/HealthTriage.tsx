@@ -29,7 +29,13 @@ export function HealthTriageModule() {
 
   const predictFn = useServerFn(predictDisease);
   const mutation = useMutation({
-    mutationFn: (symptomLabels: string[]) => predictFn({ data: { symptoms: symptomLabels } }),
+    mutationFn: (input: { symptoms: string[]; photoBase64: string | null }) =>
+      predictFn({
+        data: {
+          symptoms: input.symptoms,
+          ...(input.photoBase64 ? { photoBase64: input.photoBase64 } : {}),
+        },
+      }),
     onSuccess: (res) => {
       setServerResult(res);
       setUsedFallback(false);
@@ -95,7 +101,7 @@ export function HealthTriageModule() {
     const labels = selected
       .map((id) => SYMPTOMS.find((s) => s.id === id)?.label)
       .filter((l): l is string => !!l);
-    mutation.mutate(labels);
+    mutation.mutate({ symptoms: labels, photoBase64: photo });
   };
 
   const restart = () => {
@@ -112,7 +118,7 @@ export function HealthTriageModule() {
     <div className="grid gap-6 md:grid-cols-[1fr_360px]">
       <div>
         <p className="text-sm text-muted-foreground">
-          Answer one at a time. This gives you a <span className="font-medium text-foreground">category of concern</span> — not a diagnosis.
+          Answer one at a time. This gives you a <span className="font-medium text-foreground">category of concern</span> not a diagnosis.
         </p>
 
         {/* Selected chips strip */}
@@ -191,6 +197,12 @@ export function HealthTriageModule() {
                       ) : null;
                     })}
                   </ul>
+                  {photo && (
+                    <div className="mt-4 flex items-center gap-3 rounded-lg border border-border bg-secondary/30 p-2">
+                      <img src={photo} alt="Attached" className="h-14 w-14 rounded-md object-cover border border-border" />
+                      <p className="text-xs text-muted-foreground">Photo will be sent along with your symptoms</p>
+                    </div>
+                  )}
                   <div className="mt-6 flex flex-wrap gap-2">
                     <Button onClick={runDiagnosis}>Find diagnosis</Button>
                     <Button variant="ghost" onClick={restart}>Start over</Button>
@@ -199,7 +211,7 @@ export function HealthTriageModule() {
               ) : (
                 <>
                   <p className="mt-3 text-sm text-muted-foreground">
-                    No symptoms were marked. If your birds seem healthy, that's good news — come back if anything changes.
+                    No symptoms were marked. If your birds seem healthy, that's good news  come back if anything changes.
                   </p>
                   <div className="mt-6">
                     <Button variant="outline" onClick={restart}>Go through again</Button>
@@ -260,8 +272,11 @@ export function HealthTriageModule() {
             </div>
             {result.source === "fallback" && (
               <div className="mt-3 rounded-md border border-clay/30 bg-clay/5 px-3 py-2 text-[11px] uppercase tracking-wider text-clay">
-                Basic estimate — server unavailable, showing offline heuristic only.
+                Basic estimate server unavailable, showing offline heuristic only.
               </div>
+            )}
+            {photo && (
+              <img src={photo} alt="Attached" className="mt-3 h-24 w-24 rounded-lg object-cover border border-border" />
             )}
             <p className="mt-3 font-display text-xl">{result.conditionName}</p>
             <p className="mt-2 text-sm text-muted-foreground">{result.note}</p>
