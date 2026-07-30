@@ -6,6 +6,9 @@ import type { Database } from "@/integrations/supabase/types";
 const InputSchema = z.object({
   county: z.string().min(1).max(100).optional(),
   kind: z.enum(["vet", "agrovet"]).optional(),
+  lat: z.number().min(-90).max(90).optional(),
+  lng: z.number().min(-180).max(180).optional(),
+  maxKm: z.number().min(1).max(500).default(100).optional(),
 });
 
 export interface VetRow {
@@ -17,6 +20,7 @@ export interface VetRow {
   lat: number;
   lng: number;
   services: string[];
+  distanceKm: number | null;
 }
 
 export const listVetsFn = createServerFn({ method: "GET" })
@@ -36,6 +40,34 @@ export const listVetsFn = createServerFn({ method: "GET" })
       },
     });
 
+    // When we know the farmer's location, let PostGIS do the nearest-neighbor
+    // sort in the database instead of pulling every row and sorting in JS.
+    if (data.lat != null && data.lng != null) {
+      const { data: rows, error } = await client.rpc("nearest_vets" as never, {
+        user_lat: data.lat,
+        user_lng: data.lng,
+        filter_county: data.county ?? null,
+        filter_kind: data.kind ?? null,
+        max_km: data.maxKm ?? 100,
+        max_results: 20,
+      } as never);
+      if (error) throw new Error(error.message);
+      return ((rows ?? []) as unknown as Array<{
+        id: string; name: string; kind: "vet" | "agrovet"; county: string | null;
+        phone: string | null; lat: number; lng: number; services: string[]; distance_km: number;
+      }>).map((r) => ({
+        id: r.id,
+        name: r.name,
+        kind: r.kind,
+        county: r.county ?? "",
+        phone: r.phone ?? "",
+        lat: Number(r.lat),
+        lng: Number(r.lng),
+        services: r.services ?? [],
+        distanceKm: r.distance_km,
+      }));
+    }
+
     let q = client.from("vets").select("id, name, kind, county, phone, lat, lng, services");
     if (data.county) q = q.eq("county", data.county);
     if (data.kind) q = q.eq("kind", data.kind);
@@ -53,5 +85,6 @@ export const listVetsFn = createServerFn({ method: "GET" })
         lat: Number(r.lat),
         lng: Number(r.lng),
         services: r.services ?? [],
+        distanceKm: null,
       }));
   });

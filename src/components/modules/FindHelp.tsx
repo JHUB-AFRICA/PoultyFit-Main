@@ -28,8 +28,8 @@ export function FindHelpModule({ county }: { county: string }) {
 
   const fetchVets = useServerFn(listVetsFn);
   const { data: vets = [], isLoading } = useQuery({
-    queryKey: ["vets", "all"],
-    queryFn: () => fetchVets({ data: {} }),
+    queryKey: ["vets", me ? `${me.lat.toFixed(3)},${me.lng.toFixed(3)}` : "all"],
+    queryFn: () => fetchVets({ data: me ? { lat: me.lat, lng: me.lng } : {} }),
     staleTime: 5 * 60_000,
   });
 
@@ -47,7 +47,7 @@ export function FindHelpModule({ county }: { county: string }) {
   const list = useMemo<Listed[]>(() => {
     return vets
       .filter((v) => filter === "all" || v.kind === filter)
-      .map((v) => ({ ...v, distance: haversineKm(origin, v) }))
+      .map((v) => ({ ...v, distance: v.distanceKm ?? haversineKm(origin, v) }))
       .sort((a, b) => {
         const aSame = a.county === county ? 0 : 1;
         const bSame = b.county === county ? 0 : 1;
@@ -105,12 +105,13 @@ export function FindHelpModule({ county }: { county: string }) {
                         </p>
                       </div>
                     </div>
-                    <a
-                      href={`tel:${v.phone.replace(/\s/g, "")}`}
+                    <button
+                      type="button"
+                      onClick={() => { window.location.href = `tel:${v.phone.replace(/\s/g, "")}`; }}
                       className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
                     >
                       <Phone className="h-3 w-3" /> {v.phone}
-                    </a>
+                    </button>
                   </div>
                 </Popup>
               </Marker>
@@ -220,10 +221,12 @@ function ResultCard({ v, accent, isLocal }: { v: Listed; accent: "primary" | "cl
           <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
             <MapPin className="h-3 w-3" /> {v.county} · {v.distance.toFixed(1)} km
           </p>
-          <a href={`tel:${v.phone.replace(/\s/g, "")}`}
+          <button
+            type="button"
+            onClick={() => { window.location.href = `tel:${v.phone.replace(/\s/g, "")}`; }}
             className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-secondary/60 px-2.5 py-1 text-xs font-medium text-primary hover:bg-secondary">
             <Phone className="h-3 w-3" /> {v.phone}
-          </a>
+          </button>
         </div>
       </div>
     </div>
