@@ -71,9 +71,15 @@ export function saveProfile(p: FarmerProfile) {
         county: p.county,
         sub_county: p.ward,
         space_m2: p.spaceM2,
+        length_m: p.lengthM ?? null,
+        width_m: p.widthM ?? null,
         budget_kes: p.budgetKes,
         housing: p.housing,
-      },
+        goal: p.goal,
+        experience: p.experience,
+        starting_stage: p.startingStage,
+        poultry_type_slugs: p.poultryTypes?.length ? p.poultryTypes : ["chicken"],
+      } as never,
       { onConflict: "user_id" },
     );
   }
@@ -152,26 +158,54 @@ const HOUSING_VALUES: HousingType[] = ["backyard-open", "deep-litter", "cage", "
 function isHousing(v: unknown): v is HousingType {
   return typeof v === "string" && (HOUSING_VALUES as string[]).includes(v);
 }
+const GOAL_VALUES: BirdGoal[] = ["eggs", "meat", "dual"];
+function isGoal(v: unknown): v is BirdGoal {
+  return typeof v === "string" && (GOAL_VALUES as string[]).includes(v);
+}
+const EXPERIENCE_VALUES: Experience[] = ["first-time", "some", "experienced"];
+function isExperience(v: unknown): v is Experience {
+  return typeof v === "string" && (EXPERIENCE_VALUES as string[]).includes(v);
+}
+const STAGE_VALUES: StartingStage[] = ["chick", "grower", "layer"];
+function isStage(v: unknown): v is StartingStage {
+  return typeof v === "string" && (STAGE_VALUES as string[]).includes(v);
+}
+const POULTRY_TYPE_VALUES: PoultryType[] = ["chicken", "duck", "turkey", "goose", "quail", "guinea-fowl"];
+function toPoultryTypes(v: unknown): PoultryType[] {
+  if (!Array.isArray(v)) return ["chicken"];
+  const valid = v.filter((x): x is PoultryType => (POULTRY_TYPE_VALUES as string[]).includes(x));
+  return valid.length ? valid : ["chicken"];
+}
 
 export async function hydrateProfileFromFarm(userId: string): Promise<FarmerProfile | null> {
   if (typeof window === "undefined") return null;
   if (getProfile()) return getProfile();
-  const { data, error } = await supabase
+  const { data, error } = await (supabase
     .from("farms")
-    .select("county, sub_county, space_m2, budget_kes, housing")
+    .select("county, sub_county, space_m2, length_m, width_m, budget_kes, housing, goal, experience, starting_stage, poultry_type_slugs")
     .eq("user_id", userId)
-    .maybeSingle();
+    .maybeSingle() as unknown as Promise<{
+      data: {
+        county: string | null; sub_county: string | null; space_m2: number | null;
+        length_m: number | null; width_m: number | null; budget_kes: number | null;
+        housing: string | null; goal: string | null; experience: string | null;
+        starting_stage: string | null; poultry_type_slugs: string[] | null;
+      } | null;
+      error: { message: string } | null;
+    }>);
   if (error || !data) return null;
   const profile: FarmerProfile = {
     county: data.county ?? "",
     ward: data.sub_county ?? undefined,
     spaceM2: data.space_m2 ?? 0,
+    lengthM: data.length_m ?? undefined,
+    widthM: data.width_m ?? undefined,
     budgetKes: data.budget_kes ?? 0,
     housing: isHousing(data.housing) ? data.housing : "backyard-open",
-    goal: "eggs",
-    experience: "first-time",
-    startingStage: "chick",
-    poultryTypes: ["chicken"],
+    goal: isGoal(data.goal) ? data.goal : "eggs",
+    experience: isExperience(data.experience) ? data.experience : "first-time",
+    startingStage: isStage(data.starting_stage) ? data.starting_stage : "chick",
+    poultryTypes: toPoultryTypes(data.poultry_type_slugs),
     createdAt: new Date().toISOString(),
   };
   localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
