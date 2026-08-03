@@ -4,9 +4,10 @@ import { useQuery } from "@tanstack/react-query";
 import { computeFeasibility } from "@/lib/poultry-calc";
 import { getCountyBylaw, type CountyBylawResult } from "@/lib/bylaws.functions";
 import { saveFeasibilityReport } from "@/lib/reports.functions";
+import { generateFeasibilityPdf } from "@/lib/report-pdf";
 import { SPACE_PER_BIRD, STARTUP_COST_PER_BIRD } from "@/lib/poultry-data";
-import type { FarmerProfile } from "@/lib/auth";
-import { Ruler, Wallet, Scale, ShieldCheck, ShieldAlert, Ruler as RulerIcon, Save, Check, BookOpen, Globe } from "lucide-react";
+import { getCurrentUser, type FarmerProfile } from "@/lib/auth";
+import { Ruler, Wallet, Scale, ShieldCheck, ShieldAlert, Ruler as RulerIcon, Save, Check, BookOpen, Globe, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -48,6 +49,20 @@ export function FeasibilityModule({ profile }: { profile: FarmerProfile }) {
       toast.error(message);
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleDownload = () => {
+    const user = getCurrentUser();
+    try {
+      generateFeasibilityPdf({
+        farmerName: user?.name ?? "Farmer",
+        profile,
+        result,
+        bylawResult: bylawResult ?? null,
+      });
+    } catch {
+      toast.error("Could not generate the PDF. Try again.");
     }
   };
 
@@ -96,6 +111,13 @@ export function FeasibilityModule({ profile }: { profile: FarmerProfile }) {
               Save this report
             </>
           )}
+        </button>
+        <button
+          onClick={handleDownload}
+          className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-border px-4 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-secondary"
+        >
+          <Download className="h-4 w-4" />
+          Download PDF
         </button>
       </div>
 

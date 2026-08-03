@@ -73,7 +73,8 @@ function SignUpPage() {
             </div>
             <div>
               <Label htmlFor="password">Password</Label>
-              <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={4} autoComplete="new-password" />
+              <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} autoComplete="new-password" />
+              <p className="mt-1 text-xs text-muted-foreground">At least 8 characters.</p>
             </div>
           </div>
 

@@ -88,8 +88,8 @@ function toAuthUser(u: { id: string; email?: string | null; user_metadata?: Reco
 
 export async function signUp(name: string, email: string, password: string): Promise<AuthUser> {
   email = email.trim().toLowerCase();
-  if (!name.trim() || !email || password.length < 6) {
-    throw new Error("Enter your name, a valid email and a password of 6+ characters.");
+  if (!name.trim() || !email || password.length < 8) {
+    throw new Error("Enter your name, a valid email and a password of 8+ characters.");
   }
   const { data, error } = await supabase.auth.signUp({
     email,
@@ -104,6 +104,21 @@ export async function signUp(name: string, email: string, password: string): Pro
   if (!user) throw new Error("Sign up succeeded but no user returned. Check your email to confirm.");
   writeCache(user);
   return user;
+}
+
+export async function requestPasswordReset(email: string): Promise<void> {
+  email = email.trim().toLowerCase();
+  if (!email) throw new Error("Enter your email.");
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${window.location.origin}/reset-password`,
+  });
+  if (error) throw new Error(error.message);
+}
+
+export async function updatePassword(newPassword: string): Promise<void> {
+  if (newPassword.length < 8) throw new Error("Password must be 8+ characters.");
+  const { error } = await supabase.auth.updateUser({ password: newPassword });
+  if (error) throw new Error(error.message);
 }
 
 export async function signIn(email: string, password: string): Promise<AuthUser> {
@@ -177,4 +192,3 @@ if (typeof window !== "undefined") {
     if (u) void hydrateProfileFromFarm(u.id);
   });
 }
-

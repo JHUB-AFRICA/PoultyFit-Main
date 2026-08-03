@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { MapContainer, TileLayer, Marker, Popup, CircleMarker, LayersControl } from "react-leaflet";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { MapContainer, TileLayer, Marker, Popup, CircleMarker, LayersControl, useMap } from "react-leaflet";
 import L from "leaflet";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
@@ -21,6 +21,41 @@ L.Icon.Default.mergeOptions({
 const NAIROBI = { lat: -1.286389, lng: 36.817223 };
 
 type Listed = VetContact & { distance: number };
+
+// react-leaflet's MapContainer `center` prop only sets the *initial* view.
+// Without this, a GPS fix that resolves after first paint never actually
+// moves the map, "you are here" would sit off-screen at the Nairobi default.
+function Recenter({ me }: { me: { lat: number; lng: number } | null }) {
+  const map = useMap();
+  const done = useRef(false);
+  useEffect(() => {
+    if (me && !done.current) {
+      done.current = true;
+      map.flyTo([me.lat, me.lng], 14, { duration: 1.1 });
+    }
+  }, [me, map]);
+  return null;
+}
+
+// Opens its own popup the moment it mounts so "you are here" is the first
+// thing the farmer sees on the map, before they start looking for vets.
+function YouAreHereMarker({ me }: { me: { lat: number; lng: number } }) {
+  const ref = useRef<L.CircleMarker>(null);
+  useEffect(() => {
+    const t = setTimeout(() => ref.current?.openPopup(), 1200);
+    return () => clearTimeout(t);
+  }, []);
+  return (
+    <CircleMarker
+      ref={ref}
+      center={[me.lat, me.lng]}
+      radius={8}
+      pathOptions={{ color: "#2e7d55", fillOpacity: 0.6 }}
+    >
+      <Popup>You are here</Popup>
+    </CircleMarker>
+  );
+}
 
 export function FindHelpModule({ county }: { county: string }) {
   const [filter, setFilter] = useState<"all" | "vet" | "agrovet">("all");
@@ -64,6 +99,7 @@ export function FindHelpModule({ county }: { county: string }) {
       <div className="overflow-hidden rounded-2xl border border-border bg-card">
         <div className="h-[480px] w-full [&_.leaflet-popup-content-wrapper]:rounded-xl [&_.leaflet-popup-content-wrapper]:border [&_.leaflet-popup-content-wrapper]:border-border [&_.leaflet-popup-content-wrapper]:bg-card [&_.leaflet-popup-content-wrapper]:text-foreground [&_.leaflet-popup-content-wrapper]:shadow-lg [&_.leaflet-popup-tip]:bg-card [&_.leaflet-popup-content]:m-0 [&_.leaflet-popup-close-button]:text-muted-foreground">
           <MapContainer center={[origin.lat, origin.lng]} zoom={11} scrollWheelZoom={false}>
+            <Recenter me={me} />
             <LayersControl position="topright">
               <LayersControl.BaseLayer checked name="Satellite">
                 <TileLayer
@@ -84,11 +120,7 @@ export function FindHelpModule({ county }: { county: string }) {
               url="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"
               pane="overlayPane"
             />
-            {me && (
-              <CircleMarker center={[me.lat, me.lng]} radius={8} pathOptions={{ color: "#2e7d55", fillOpacity: 0.6 }}>
-                <Popup>You are here</Popup>
-              </CircleMarker>
-            )}
+            {me && <YouAreHereMarker me={me} />}
             {list.map((v) => (
               <Marker key={v.id} position={[v.lat, v.lng]}>
                 <Popup>
@@ -212,11 +244,18 @@ function ResultCard({ v, accent, isLocal }: { v: Listed; accent: "primary" | "cl
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
             <p className="text-sm font-medium leading-tight">{v.name}</p>
-            {isLocal && (
-              <span className="shrink-0 rounded-full bg-secondary px-2 py-0.5 text-[10px] uppercase tracking-wider text-muted-foreground">
-                Local
-              </span>
-            )}
+            <div className="flex shrink-0 flex-col items-end gap-1">
+              {isLocal && (
+                <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+                  Local
+                </span>
+              )}
+              {v.source === "google" && (
+                <span className="rounded-full bg-secondary/60 px-2 py-0.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+                  Via Google Maps
+                </span>
+              )}
+            </div>
           </div>
           <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
             <MapPin className="h-3 w-3" /> {v.county} · {v.distance.toFixed(1)} km
