@@ -17,6 +17,10 @@ import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated.dashboard'
+import { Route as AuthenticatedDashboardIndexRouteImport } from './routes/_authenticated.dashboard.index'
+import { Route as AuthenticatedDashboardFindRouteImport } from './routes/_authenticated.dashboard.find'
+import { Route as AuthenticatedDashboardFeedRouteImport } from './routes/_authenticated.dashboard.feed'
+import { Route as AuthenticatedDashboardFeasibilityRouteImport } from './routes/_authenticated.dashboard.feasibility'
 
 const SignupRoute = SignupRouteImport.update({
   id: '/signup',
@@ -57,6 +61,30 @@ const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedDashboardIndexRoute =
+  AuthenticatedDashboardIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthenticatedDashboardRoute,
+  } as any)
+const AuthenticatedDashboardFindRoute =
+  AuthenticatedDashboardFindRouteImport.update({
+    id: '/find',
+    path: '/find',
+    getParentRoute: () => AuthenticatedDashboardRoute,
+  } as any)
+const AuthenticatedDashboardFeedRoute =
+  AuthenticatedDashboardFeedRouteImport.update({
+    id: '/feed',
+    path: '/feed',
+    getParentRoute: () => AuthenticatedDashboardRoute,
+  } as any)
+const AuthenticatedDashboardFeasibilityRoute =
+  AuthenticatedDashboardFeasibilityRouteImport.update({
+    id: '/feasibility',
+    path: '/feasibility',
+    getParentRoute: () => AuthenticatedDashboardRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -65,7 +93,11 @@ export interface FileRoutesByFullPath {
   '/reset-password': typeof ResetPasswordRoute
   '/signin': typeof SigninRoute
   '/signup': typeof SignupRoute
-  '/dashboard': typeof AuthenticatedDashboardRoute
+  '/dashboard': typeof AuthenticatedDashboardRouteWithChildren
+  '/dashboard/feasibility': typeof AuthenticatedDashboardFeasibilityRoute
+  '/dashboard/feed': typeof AuthenticatedDashboardFeedRoute
+  '/dashboard/find': typeof AuthenticatedDashboardFindRoute
+  '/dashboard/': typeof AuthenticatedDashboardIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -74,7 +106,10 @@ export interface FileRoutesByTo {
   '/reset-password': typeof ResetPasswordRoute
   '/signin': typeof SigninRoute
   '/signup': typeof SignupRoute
-  '/dashboard': typeof AuthenticatedDashboardRoute
+  '/dashboard/feasibility': typeof AuthenticatedDashboardFeasibilityRoute
+  '/dashboard/feed': typeof AuthenticatedDashboardFeedRoute
+  '/dashboard/find': typeof AuthenticatedDashboardFindRoute
+  '/dashboard': typeof AuthenticatedDashboardIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -85,7 +120,11 @@ export interface FileRoutesById {
   '/reset-password': typeof ResetPasswordRoute
   '/signin': typeof SigninRoute
   '/signup': typeof SignupRoute
-  '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
+  '/_authenticated/dashboard': typeof AuthenticatedDashboardRouteWithChildren
+  '/_authenticated/dashboard/feasibility': typeof AuthenticatedDashboardFeasibilityRoute
+  '/_authenticated/dashboard/feed': typeof AuthenticatedDashboardFeedRoute
+  '/_authenticated/dashboard/find': typeof AuthenticatedDashboardFindRoute
+  '/_authenticated/dashboard/': typeof AuthenticatedDashboardIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -97,6 +136,10 @@ export interface FileRouteTypes {
     | '/signin'
     | '/signup'
     | '/dashboard'
+    | '/dashboard/feasibility'
+    | '/dashboard/feed'
+    | '/dashboard/find'
+    | '/dashboard/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -105,6 +148,9 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/signin'
     | '/signup'
+    | '/dashboard/feasibility'
+    | '/dashboard/feed'
+    | '/dashboard/find'
     | '/dashboard'
   id:
     | '__root__'
@@ -116,6 +162,10 @@ export interface FileRouteTypes {
     | '/signin'
     | '/signup'
     | '/_authenticated/dashboard'
+    | '/_authenticated/dashboard/feasibility'
+    | '/_authenticated/dashboard/feed'
+    | '/_authenticated/dashboard/find'
+    | '/_authenticated/dashboard/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -186,15 +236,64 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDashboardRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/dashboard/': {
+      id: '/_authenticated/dashboard/'
+      path: '/'
+      fullPath: '/dashboard/'
+      preLoaderRoute: typeof AuthenticatedDashboardIndexRouteImport
+      parentRoute: typeof AuthenticatedDashboardRoute
+    }
+    '/_authenticated/dashboard/find': {
+      id: '/_authenticated/dashboard/find'
+      path: '/find'
+      fullPath: '/dashboard/find'
+      preLoaderRoute: typeof AuthenticatedDashboardFindRouteImport
+      parentRoute: typeof AuthenticatedDashboardRoute
+    }
+    '/_authenticated/dashboard/feed': {
+      id: '/_authenticated/dashboard/feed'
+      path: '/feed'
+      fullPath: '/dashboard/feed'
+      preLoaderRoute: typeof AuthenticatedDashboardFeedRouteImport
+      parentRoute: typeof AuthenticatedDashboardRoute
+    }
+    '/_authenticated/dashboard/feasibility': {
+      id: '/_authenticated/dashboard/feasibility'
+      path: '/feasibility'
+      fullPath: '/dashboard/feasibility'
+      preLoaderRoute: typeof AuthenticatedDashboardFeasibilityRouteImport
+      parentRoute: typeof AuthenticatedDashboardRoute
+    }
   }
 }
 
+interface AuthenticatedDashboardRouteChildren {
+  AuthenticatedDashboardFeasibilityRoute: typeof AuthenticatedDashboardFeasibilityRoute
+  AuthenticatedDashboardFeedRoute: typeof AuthenticatedDashboardFeedRoute
+  AuthenticatedDashboardFindRoute: typeof AuthenticatedDashboardFindRoute
+  AuthenticatedDashboardIndexRoute: typeof AuthenticatedDashboardIndexRoute
+}
+
+const AuthenticatedDashboardRouteChildren: AuthenticatedDashboardRouteChildren =
+  {
+    AuthenticatedDashboardFeasibilityRoute:
+      AuthenticatedDashboardFeasibilityRoute,
+    AuthenticatedDashboardFeedRoute: AuthenticatedDashboardFeedRoute,
+    AuthenticatedDashboardFindRoute: AuthenticatedDashboardFindRoute,
+    AuthenticatedDashboardIndexRoute: AuthenticatedDashboardIndexRoute,
+  }
+
+const AuthenticatedDashboardRouteWithChildren =
+  AuthenticatedDashboardRoute._addFileChildren(
+    AuthenticatedDashboardRouteChildren,
+  )
+
 interface AuthenticatedRouteChildren {
-  AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
+  AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRouteWithChildren
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
-  AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
+  AuthenticatedDashboardRoute: AuthenticatedDashboardRouteWithChildren,
 }
 
 const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(
