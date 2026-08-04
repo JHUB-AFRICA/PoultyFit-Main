@@ -18,6 +18,7 @@ import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated.dashboard'
 import { Route as AuthenticatedDashboardIndexRouteImport } from './routes/_authenticated.dashboard.index'
+import { Route as AuthenticatedDashboardHealthRouteImport } from './routes/_authenticated.dashboard.health'
 import { Route as AuthenticatedDashboardFindRouteImport } from './routes/_authenticated.dashboard.find'
 import { Route as AuthenticatedDashboardFeedRouteImport } from './routes/_authenticated.dashboard.feed'
 import { Route as AuthenticatedDashboardFeasibilityRouteImport } from './routes/_authenticated.dashboard.feasibility'
@@ -67,6 +68,12 @@ const AuthenticatedDashboardIndexRoute =
     path: '/',
     getParentRoute: () => AuthenticatedDashboardRoute,
   } as any)
+const AuthenticatedDashboardHealthRoute =
+  AuthenticatedDashboardHealthRouteImport.update({
+    id: '/health',
+    path: '/health',
+    getParentRoute: () => AuthenticatedDashboardRoute,
+  } as any)
 const AuthenticatedDashboardFindRoute =
   AuthenticatedDashboardFindRouteImport.update({
     id: '/find',
@@ -97,6 +104,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/feasibility': typeof AuthenticatedDashboardFeasibilityRoute
   '/dashboard/feed': typeof AuthenticatedDashboardFeedRoute
   '/dashboard/find': typeof AuthenticatedDashboardFindRoute
+  '/dashboard/health': typeof AuthenticatedDashboardHealthRoute
   '/dashboard/': typeof AuthenticatedDashboardIndexRoute
 }
 export interface FileRoutesByTo {
@@ -109,6 +117,7 @@ export interface FileRoutesByTo {
   '/dashboard/feasibility': typeof AuthenticatedDashboardFeasibilityRoute
   '/dashboard/feed': typeof AuthenticatedDashboardFeedRoute
   '/dashboard/find': typeof AuthenticatedDashboardFindRoute
+  '/dashboard/health': typeof AuthenticatedDashboardHealthRoute
   '/dashboard': typeof AuthenticatedDashboardIndexRoute
 }
 export interface FileRoutesById {
@@ -124,6 +133,7 @@ export interface FileRoutesById {
   '/_authenticated/dashboard/feasibility': typeof AuthenticatedDashboardFeasibilityRoute
   '/_authenticated/dashboard/feed': typeof AuthenticatedDashboardFeedRoute
   '/_authenticated/dashboard/find': typeof AuthenticatedDashboardFindRoute
+  '/_authenticated/dashboard/health': typeof AuthenticatedDashboardHealthRoute
   '/_authenticated/dashboard/': typeof AuthenticatedDashboardIndexRoute
 }
 export interface FileRouteTypes {
@@ -139,6 +149,7 @@ export interface FileRouteTypes {
     | '/dashboard/feasibility'
     | '/dashboard/feed'
     | '/dashboard/find'
+    | '/dashboard/health'
     | '/dashboard/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -151,6 +162,7 @@ export interface FileRouteTypes {
     | '/dashboard/feasibility'
     | '/dashboard/feed'
     | '/dashboard/find'
+    | '/dashboard/health'
     | '/dashboard'
   id:
     | '__root__'
@@ -165,6 +177,7 @@ export interface FileRouteTypes {
     | '/_authenticated/dashboard/feasibility'
     | '/_authenticated/dashboard/feed'
     | '/_authenticated/dashboard/find'
+    | '/_authenticated/dashboard/health'
     | '/_authenticated/dashboard/'
   fileRoutesById: FileRoutesById
 }
@@ -243,6 +256,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDashboardIndexRouteImport
       parentRoute: typeof AuthenticatedDashboardRoute
     }
+    '/_authenticated/dashboard/health': {
+      id: '/_authenticated/dashboard/health'
+      path: '/health'
+      fullPath: '/dashboard/health'
+      preLoaderRoute: typeof AuthenticatedDashboardHealthRouteImport
+      parentRoute: typeof AuthenticatedDashboardRoute
+    }
     '/_authenticated/dashboard/find': {
       id: '/_authenticated/dashboard/find'
       path: '/find'
@@ -271,6 +291,7 @@ interface AuthenticatedDashboardRouteChildren {
   AuthenticatedDashboardFeasibilityRoute: typeof AuthenticatedDashboardFeasibilityRoute
   AuthenticatedDashboardFeedRoute: typeof AuthenticatedDashboardFeedRoute
   AuthenticatedDashboardFindRoute: typeof AuthenticatedDashboardFindRoute
+  AuthenticatedDashboardHealthRoute: typeof AuthenticatedDashboardHealthRoute
   AuthenticatedDashboardIndexRoute: typeof AuthenticatedDashboardIndexRoute
 }
 
@@ -280,6 +301,7 @@ const AuthenticatedDashboardRouteChildren: AuthenticatedDashboardRouteChildren =
       AuthenticatedDashboardFeasibilityRoute,
     AuthenticatedDashboardFeedRoute: AuthenticatedDashboardFeedRoute,
     AuthenticatedDashboardFindRoute: AuthenticatedDashboardFindRoute,
+    AuthenticatedDashboardHealthRoute: AuthenticatedDashboardHealthRoute,
     AuthenticatedDashboardIndexRoute: AuthenticatedDashboardIndexRoute,
   }
 
