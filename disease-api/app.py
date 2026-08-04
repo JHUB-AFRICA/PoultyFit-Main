@@ -80,9 +80,9 @@ def load_models():
         with open(FEATURE_NAMES_PATH, "rb") as f:
             models["feature_names"] = pickle.load(f)
         
-        # Load XGBoost symptoms model
-        models["symptoms_model"] = xgb.XGBClassifier()
-        models["symptoms_model"].load_model(SYMPTOMS_MODEL_PATH)
+        # Load XGBoost symptoms model (pickled object)
+        with open(SYMPTOMS_MODEL_PATH, "rb") as f:
+            models["symptoms_model"] = pickle.load(f)
         
         # Load Keras image models
         models["chicken_image_model"] = tf.keras.models.load_model(CHICKEN_IMAGE_MODEL_PATH)
@@ -161,21 +161,27 @@ def ensemble_predict(symptom_proba, chicken_proba, droppings_proba):
         "droppings_image": 0.2,
     }
     
-    combined = np.zeros_like(symptom_proba)
+    combined = np.zeros_like(symptom_proba) if symptom_proba is not None else None
     sources = []
     
     if symptom_proba is not None:
+        if combined is None:
+            combined = np.zeros_like(symptom_proba)
         combined += weights["symptoms"] * symptom_proba
         sources.append("symptoms")
     if chicken_proba is not None:
+        if combined is None:
+            combined = np.zeros_like(chicken_proba)
         combined += weights["chicken_image"] * chicken_proba
         sources.append("chicken_image")
     if droppings_proba is not None:
+        if combined is None:
+            combined = np.zeros_like(droppings_proba)
         combined += weights["droppings_image"] * droppings_proba
         sources.append("droppings_image")
     
     # Renormalize
-    if len(sources) > 0:
+    if combined is not None and len(sources) > 0:
         combined = combined / sum([weights[s] for s in sources])
     
     return combined, sources
@@ -198,9 +204,9 @@ def get_symptom_list():
         raise HTTPException(status_code=503, detail="Models not loaded")
     
     return SymptomListResponse(
-        symptoms=models["metadata"]["feature_order"][:-1],  # Exclude 'species'
-        diseases=models["metadata"]["diseases"],
-        species=models["metadata"]["species"],
+        symptoms=models["metadata"].get("feature_order", [])[:-1],  # Exclude 'species'
+        diseases=models["metadata"].get("diseases", []),
+        species=models["metadata"].get("species", []),
     )
 
 
