@@ -142,6 +142,37 @@ export function generateFeasibilityPdf(opts: {
   }
   y += 2;
 
+  // --- Budget breakdown ------------------------------------------------
+  ensureSpace(24);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(12);
+  doc.setTextColor(...INK);
+  doc.text("Your budget, broken down", MARGIN, y);
+  y += 7;
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9.5);
+  doc.setTextColor(...INK);
+  doc.text(
+    `${result.recommended} birds x KES ${result.budget.costPerBird} = KES ${result.budget.stockCost.toLocaleString()} on stock`,
+    MARGIN,
+    y,
+  );
+  y += 6;
+  const feedLine =
+    result.budget.feedWeeksCovered !== null
+      ? `KES ${result.budget.feedBudgetRemaining.toLocaleString()} left for feed, about ${result.budget.feedWeeksCovered} weeks at current prices`
+      : `KES ${result.budget.feedBudgetRemaining.toLocaleString()} left for feed`;
+  doc.text(feedLine, MARGIN, y);
+  y += 6;
+  if (result.budget.feedWeeksCovered !== null && result.budget.feedWeeksCovered < result.budget.feedReserveWeeks) {
+    doc.setTextColor(176, 96, 25);
+    doc.setFont("helvetica", "bold");
+    doc.text(`Tight: this plan targets a ${result.budget.feedReserveWeeks}-week feed reserve, this budget falls short.`, MARGIN, y);
+    y += 6;
+  }
+  y += 2;
+
   // --- Bylaw / regulation guidance -----------------------------------
   const bylaw = bylawResult?.countyBylaw ?? null;
   const hasSummary = !!bylaw?.bylaw_summary && bylaw.bylaw_summary.trim().length > 0;

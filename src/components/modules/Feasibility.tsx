@@ -1,18 +1,21 @@
 import { useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
-import { computeFeasibility } from "@/lib/poultry-calc";
+import { computeFeasibility, feedCostPerBirdPerWeek } from "@/lib/poultry-calc";
 import { getCountyBylaw, type CountyBylawResult } from "@/lib/bylaws.functions";
+import { getFeedIngredients } from "@/lib/feed.functions";
 import { saveFeasibilityReport } from "@/lib/reports.functions";
 import { generateFeasibilityPdf } from "@/lib/report-pdf";
 import { SPACE_PER_BIRD, STARTUP_COST_PER_BIRD } from "@/lib/poultry-data";
 import { getCurrentUser, type FarmerProfile } from "@/lib/auth";
-import { Ruler, Wallet, Scale, ShieldCheck, ShieldAlert, Ruler as RulerIcon, Save, Check, BookOpen, Globe, Download } from "lucide-react";
+import { Ruler, Wallet, Scale, ShieldCheck, ShieldAlert, Ruler as RulerIcon, Save, Check, BookOpen, Globe, Download, Wheat } from "lucide-react";
+import { Link } from "@tanstack/react-router";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 export function FeasibilityModule({ profile }: { profile: FarmerProfile }) {
   const fetchBylaw = useServerFn(getCountyBylaw);
+  const fetchIngredients = useServerFn(getFeedIngredients);
   const saveReport = useServerFn(saveFeasibilityReport);
   const [isSaving, setIsSaving] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
@@ -24,10 +27,16 @@ export function FeasibilityModule({ profile }: { profile: FarmerProfile }) {
     staleTime: 5 * 60_000,
   });
 
-  const result = useMemo(
-    () => computeFeasibility(profile, bylawResult?.countyBylaw ?? null),
-    [profile, bylawResult]
-  );
+  const { data: ingredients } = useQuery({
+    queryKey: ["feed_ingredients", profile.county],
+    queryFn: () => fetchIngredients({ data: { county: profile.county } }),
+    staleTime: 5 * 60_000,
+  });
+
+  const result = useMemo(() => {
+    const weeklyFeed = ingredients ? feedCostPerBirdPerWeek(profile.startingStage, ingredients) : null;
+    return computeFeasibility(profile, bylawResult?.countyBylaw ?? null, weeklyFeed);
+  }, [profile, bylawResult, ingredients]);
   const perBird = SPACE_PER_BIRD[profile.housing];
 
   const handleSave = async () => {
@@ -133,7 +142,11 @@ export function FeasibilityModule({ profile }: { profile: FarmerProfile }) {
           icon={Wallet}
           label="By budget"
           value={result.maxByBudget}
-          hint={`KES ${profile.budgetKes.toLocaleString()} / KES ${STARTUP_COST_PER_BIRD[profile.startingStage]}/bird (${stageLabel(profile.startingStage)})`}
+          hint={
+            result.budget.feedCostPerBirdPerWeek != null
+              ? `KES ${profile.budgetKes.toLocaleString()} covers birds + ${result.budget.feedReserveWeeks}wk feed reserve`
+              : `KES ${profile.budgetKes.toLocaleString()} / KES ${STARTUP_COST_PER_BIRD[profile.startingStage]}/bird (${stageLabel(profile.startingStage)})`
+          }
           binding={result.bindingConstraint === "budget"}
         />
         {result.maxByBylaw !== null && (
@@ -148,8 +161,56 @@ export function FeasibilityModule({ profile }: { profile: FarmerProfile }) {
       </div>
 
       <div className="md:col-span-3">
+        <BudgetBreakdownCard profile={profile} result={result} />
+      </div>
+
+      <div className="md:col-span-3">
         <BylawCallout county={profile.county} bylawResult={bylawResult ?? null} />
       </div>
+    </div>
+  );
+}
+
+function BudgetBreakdownCard({ profile, result }: { profile: FarmerProfile; result: ReturnType<typeof computeFeasibility> }) {
+  const { budget } = result;
+  const stageWord = stageLabel(profile.startingStage);
+  const tight = budget.feedWeeksCovered !== null && budget.feedWeeksCovered < budget.feedReserveWeeks;
+
+  return (
+    <div className="rounded-2xl border border-border bg-card p-5">
+      <div className="flex items-center gap-2">
+        <Wheat className="h-4 w-4 text-muted-foreground" />
+        <h3 className="font-display text-lg">Your budget, broken down</h3>
+      </div>
+      <div className="mt-4 grid gap-4 sm:grid-cols-3">
+        <div>
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">Bird stock</p>
+          <p className="mt-1 font-display text-xl">{result.recommended} × KES {budget.costPerBird}</p>
+          <p className="text-xs text-muted-foreground">= KES {budget.stockCost.toLocaleString()} for {stageWord}</p>
+        </div>
+        <div>
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">Left for feed</p>
+          <p className="mt-1 font-display text-xl">KES {budget.feedBudgetRemaining.toLocaleString()}</p>
+          <p className="text-xs text-muted-foreground">
+            {budget.feedWeeksCovered !== null
+              ? `covers about ${budget.feedWeeksCovered} weeks at current feed prices`
+              : "feed price data loading…"}
+          </p>
+        </div>
+        <div>
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">Planning target</p>
+          <p className="mt-1 font-display text-xl">{budget.feedReserveWeeks} weeks</p>
+          <p className="text-xs text-muted-foreground">minimum feed reserve this plan protects</p>
+        </div>
+      </div>
+      {tight && (
+        <p className="mt-4 rounded-lg bg-clay/10 px-3 py-2 text-xs text-clay">
+          This budget is tight, feed money runs low before {budget.feedReserveWeeks} weeks. Consider fewer birds or a bigger starting budget.
+        </p>
+      )}
+      <Link to="/dashboard/feed" className="mt-4 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
+        See the full feed plan →
+      </Link>
     </div>
   );
 }

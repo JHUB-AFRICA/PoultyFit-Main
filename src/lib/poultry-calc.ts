@@ -8,6 +8,20 @@ import type { CountyBylawRow } from "./bylaws.functions";
 
 // --- Feasibility -----------------------------------------------------------
 
+// How many weeks of feed the budget should reserve on top of buying the
+// birds themselves. A farmer who spends everything on stock and has zero
+// left for feed runs into trouble in week one — this keeps that honest.
+const FEED_RESERVE_WEEKS = 4;
+
+export interface BudgetBreakdown {
+  costPerBird: number;
+  feedCostPerBirdPerWeek: number | null; // null when real feed price data wasn't available
+  feedReserveWeeks: number;
+  stockCost: number;
+  feedBudgetRemaining: number;
+  feedWeeksCovered: number | null;
+}
+
 export interface FeasibilityResult {
   maxBySpace: number;
   maxByBudget: number;
@@ -15,13 +29,29 @@ export interface FeasibilityResult {
   recommended: number;
   bindingConstraint: "space" | "budget" | "bylaw";
   notes: string[];
+  budget: BudgetBreakdown;
 }
 
-export function computeFeasibility(p: FarmerProfile, bylaw: CountyBylawRow | null): FeasibilityResult {
+/**
+ * @param feedCostPerBirdPerWeek Real feed cost for one bird at the farmer's
+ * starting stage, for one week, computed from live feed_ingredients/feed_prices
+ * data (see feedCostPerBirdPerWeek() below). Pass null while that data hasn't
+ * loaded yet — the budget constraint then falls back to bird-stock cost only,
+ * same behavior as before this reserve logic existed.
+ */
+export function computeFeasibility(
+  p: FarmerProfile,
+  bylaw: CountyBylawRow | null,
+  feedCostPerBirdPerWeek: number | null = null,
+): FeasibilityResult {
   const perBird = SPACE_PER_BIRD[p.housing] ?? 0.5;
   const maxBySpace = Math.max(0, Math.floor(p.spaceM2 / perBird));
+
   const costPerBird = STARTUP_COST_PER_BIRD[p.startingStage] ?? STARTUP_COST_PER_BIRD.chick;
-  const maxByBudget = Math.max(0, Math.floor(p.budgetKes / costPerBird));
+  const feedReservePerBird = feedCostPerBirdPerWeek != null ? feedCostPerBirdPerWeek * FEED_RESERVE_WEEKS : 0;
+  const totalCostPerBird = costPerBird + feedReservePerBird;
+  const maxByBudget = Math.max(0, Math.floor(p.budgetKes / totalCostPerBird));
+
   const maxByBylaw = bylaw?.max_birds_residential ?? null;
 
   const candidates: { value: number; key: FeasibilityResult["bindingConstraint"] }[] = [
@@ -36,6 +66,14 @@ export function computeFeasibility(p: FarmerProfile, bylaw: CountyBylawRow | nul
   if (bylaw?.setback_meters) notes.push(`Keep the coop at least ${bylaw.setback_meters}m from the nearest neighbour to avoid disputes.`);
   if (bylaw?.notes) notes.push(bylaw.notes);
 
+  const stockCost = Math.round(min.value * costPerBird);
+  const feedBudgetRemaining = Math.max(0, p.budgetKes - stockCost);
+  const flockWeeklyFeedCost = feedCostPerBirdPerWeek != null ? feedCostPerBirdPerWeek * min.value : null;
+  const feedWeeksCovered =
+    flockWeeklyFeedCost && flockWeeklyFeedCost > 0
+      ? Math.round((feedBudgetRemaining / flockWeeklyFeedCost) * 10) / 10
+      : null;
+
   return {
     maxBySpace,
     maxByBudget,
@@ -43,6 +81,14 @@ export function computeFeasibility(p: FarmerProfile, bylaw: CountyBylawRow | nul
     recommended: min.value,
     bindingConstraint: min.key,
     notes,
+    budget: {
+      costPerBird,
+      feedCostPerBirdPerWeek,
+      feedReserveWeeks: FEED_RESERVE_WEEKS,
+      stockCost,
+      feedBudgetRemaining,
+      feedWeeksCovered,
+    },
   };
 }
 
@@ -118,6 +164,18 @@ export function computeFeedPlan(
     }
   }
   return best;
+}
+
+/**
+ * One bird's feed cost for one week at a given stage, using the same
+ * least-cost mix logic as the full Feed Plan module. Feeds directly into
+ * computeFeasibility's budget reserve so the two modules use one real
+ * number instead of a guess.
+ */
+export function feedCostPerBirdPerWeek(stage: BirdStage, ingredients: FeedIngredient[]): number | null {
+  const plan = computeFeedPlan(stage, 1, ingredients);
+  if (!plan) return null;
+  return Math.round(plan.dailyCost * 7 * 100) / 100;
 }
 
 // --- Triage ----------------------------------------------------------------
