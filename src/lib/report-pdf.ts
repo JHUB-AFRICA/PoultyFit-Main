@@ -198,26 +198,46 @@ export function generateFeasibilityPdf(opts: {
     const summaryLines = doc.splitTextToSize(bylaw.bylaw_summary ?? "", CONTENT_W);
     ensureSpace(summaryLines.length * 5 + 4);
     doc.text(summaryLines, MARGIN, y);
-    y += summaryLines.length * 5 + 3;
+    y += summaryLines.length * 5 + 5;
 
+    const checklist: { label: string; detail: string }[] = [];
+    if (bylaw.permit_required) {
+      checklist.push({ label: "Get a keeping permit", detail: "Visit your ward or sub-county livestock office before you start." });
+    }
     if (bylaw.setback_meters !== null) {
-      ensureSpace(6);
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(9);
-      doc.text(`Setback from neighbour: `, MARGIN, y);
-      doc.setFont("helvetica", "normal");
-      doc.text(`${bylaw.setback_meters} m minimum`, MARGIN + 42, y);
-      y += 6;
+      checklist.push({ label: `Keep ${bylaw.setback_meters}m from your neighbour`, detail: "Minimum coop distance from the property boundary." });
     }
     if (bylaw.max_birds_residential !== null) {
-      ensureSpace(6);
+      checklist.push({ label: `Stay at or under ${bylaw.max_birds_residential} birds`, detail: "Advisory maximum for a residential/urban plot in this county." });
+    }
+    if (bylaw.notes) {
+      checklist.push({ label: "One more thing", detail: bylaw.notes });
+    }
+
+    if (checklist.length > 0) {
+      ensureSpace(8);
       doc.setFont("helvetica", "bold");
       doc.setFontSize(9);
-      doc.text(`Urban backyard cap: `, MARGIN, y);
-      doc.setFont("helvetica", "normal");
-      doc.text(`${bylaw.max_birds_residential} birds (advisory)`, MARGIN + 38, y);
+      doc.setTextColor(...MUTED);
+      doc.text("BEFORE YOU START", MARGIN, y);
       y += 6;
+
+      checklist.forEach((item, i) => {
+        const detailLines = doc.splitTextToSize(item.detail, CONTENT_W - 8);
+        ensureSpace(6 + detailLines.length * 4.5);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(9.5);
+        doc.setTextColor(...INK);
+        doc.text(`${i + 1}. ${item.label}`, MARGIN, y);
+        y += 5;
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8.5);
+        doc.setTextColor(...MUTED);
+        doc.text(detailLines, MARGIN + 5, y);
+        y += detailLines.length * 4.5 + 3;
+      });
     }
+
     if (bylaw.source_url) {
       ensureSpace(6);
       doc.setFontSize(8);
@@ -225,47 +245,44 @@ export function generateFeasibilityPdf(opts: {
       doc.text(`Source: ${bylaw.source_url}`, MARGIN, y);
       y += 5;
     }
-    if (bylaw.notes) {
-      ensureSpace(10);
-      doc.setFont("helvetica", "italic");
-      doc.setFontSize(8.5);
-      doc.setTextColor(...MUTED);
-      const noteLines = doc.splitTextToSize(bylaw.notes, CONTENT_W);
-      doc.text(noteLines, MARGIN, y);
-      y += noteLines.length * 5 + 2;
-    }
   } else {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9.5);
     doc.setTextColor(...INK);
     doc.text(`No specific bylaw is on record for ${profile.county} County. National regulations apply:`, MARGIN, y);
-    y += 7;
+    y += 8;
 
     const regs = bylawResult?.nationalRegulations ?? [];
-    for (const reg of regs) {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(...MUTED);
+    if (regs.length > 0) {
+      ensureSpace(6);
+      doc.text("BEFORE YOU START", MARGIN, y);
+      y += 6;
+    }
+    regs.forEach((reg, i) => {
       ensureSpace(16);
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(9);
-      doc.setTextColor(...GREEN);
-      doc.text(reg.category ?? "Regulation", MARGIN, y);
-      y += 5;
-      doc.setFont("helvetica", "italic");
-      doc.setFontSize(8);
-      doc.setTextColor(...MUTED);
-      doc.text(reg.legal_instrument ?? "", MARGIN, y);
+      doc.setFontSize(9.5);
+      doc.setTextColor(...INK);
+      doc.text(`${i + 1}. ${reg.category ?? "Regulation"}`, MARGIN, y);
       y += 5;
       if (reg.requirement) {
         doc.setFont("helvetica", "normal");
-        doc.setFontSize(9);
-        doc.setTextColor(...INK);
-        const reqLines = doc.splitTextToSize(reg.requirement, CONTENT_W);
-        ensureSpace(reqLines.length * 5);
-        doc.text(reqLines, MARGIN, y);
-        y += reqLines.length * 5 + 4;
-      } else {
-        y += 3;
+        doc.setFontSize(8.5);
+        doc.setTextColor(...MUTED);
+        const reqLines = doc.splitTextToSize(reg.requirement, CONTENT_W - 5);
+        ensureSpace(reqLines.length * 4.5);
+        doc.text(reqLines, MARGIN + 5, y);
+        y += reqLines.length * 4.5 + 2;
       }
-    }
+      doc.setFont("helvetica", "italic");
+      doc.setFontSize(7.5);
+      doc.setTextColor(...MUTED);
+      doc.text(`${reg.legal_instrument ?? ""}${reg.source ? ` · ${reg.source}` : ""}`, MARGIN + 5, y);
+      y += 6;
+    });
   }
 
   // --- Footer on every page --------------------------------------------

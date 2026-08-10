@@ -6,9 +6,9 @@ import { getCountyBylaw, type CountyBylawResult } from "@/lib/bylaws.functions";
 import { getFeedIngredients } from "@/lib/feed.functions";
 import { saveFeasibilityReport } from "@/lib/reports.functions";
 import { generateFeasibilityPdf } from "@/lib/report-pdf";
-import { SPACE_PER_BIRD, STARTUP_COST_PER_BIRD } from "@/lib/poultry-data";
-import { getCurrentUser, type FarmerProfile } from "@/lib/auth";
-import { Ruler, Wallet, Scale, ShieldCheck, ShieldAlert, Ruler as RulerIcon, Save, Check, BookOpen, Globe, Download, Wheat } from "lucide-react";
+import { SPACE_PER_BIRD, STARTUP_COST_PER_BIRD, POULTRY_LABEL } from "@/lib/poultry-data";
+import { getCurrentUser, type FarmerProfile, type PoultryType } from "@/lib/auth";
+import { Ruler, Wallet, Scale, ShieldCheck, ShieldAlert, Save, Check, BookOpen, Globe, Download, Wheat } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -34,8 +34,14 @@ export function FeasibilityModule({ profile }: { profile: FarmerProfile }) {
   });
 
   const result = useMemo(() => {
-    const weeklyFeed = ingredients ? feedCostPerBirdPerWeek(profile.startingStage, ingredients) : null;
-    return computeFeasibility(profile, bylawResult?.countyBylaw ?? null, weeklyFeed);
+    const speciesList: PoultryType[] = profile.poultryTypes?.length ? profile.poultryTypes : ["chicken"];
+    const feedCosts: Partial<Record<PoultryType, number | null>> = {};
+    if (ingredients) {
+      for (const species of speciesList) {
+        feedCosts[species] = feedCostPerBirdPerWeek(profile.startingStage, ingredients, species);
+      }
+    }
+    return computeFeasibility(profile, bylawResult?.countyBylaw ?? null, feedCosts);
   }, [profile, bylawResult, ingredients]);
   const perBird = SPACE_PER_BIRD[profile.housing];
 
@@ -94,6 +100,16 @@ export function FeasibilityModule({ profile }: { profile: FarmerProfile }) {
         <div className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
           Limited by {result.bindingConstraint}
         </div>
+        {result.bySpecies.length > 1 && (
+          <div className="mt-4 space-y-1.5 border-t border-border pt-4">
+            {result.bySpecies.map((b) => (
+              <div key={b.species} className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">{POULTRY_LABEL[b.species]}</span>
+                <span className="font-medium">{b.recommended} birds</span>
+              </div>
+            ))}
+          </div>
+        )}
         <button
           onClick={handleSave}
           disabled={isSaving || justSaved}
@@ -228,6 +244,21 @@ function BylawCallout({
 
   if (hasSummary && bylaw) {
     const warn = bylaw.permit_required;
+
+    const checklist: { label: string; detail: string }[] = [];
+    if (bylaw.permit_required) {
+      checklist.push({ label: "Get a keeping permit", detail: "Visit your ward or sub-county livestock office before you start." });
+    }
+    if (bylaw.setback_meters !== null) {
+      checklist.push({ label: `Keep ${bylaw.setback_meters}m from your neighbour`, detail: "Minimum coop distance from the property boundary, advised to avoid disputes." });
+    }
+    if (bylaw.max_birds_residential !== null) {
+      checklist.push({ label: `Stay at or under ${bylaw.max_birds_residential} birds`, detail: "Advisory maximum for a residential/urban plot in this county." });
+    }
+    if (bylaw.notes) {
+      checklist.push({ label: "One more thing", detail: bylaw.notes });
+    }
+
     return (
       <div
         className={cn(
@@ -252,28 +283,22 @@ function BylawCallout({
           </span>
         </div>
 
-        <p className="mt-4 text-sm text-foreground/80 leading-relaxed">{bylaw.bylaw_summary}</p>
+        <p className="mt-3 text-sm text-foreground/80 leading-relaxed">{bylaw.bylaw_summary}</p>
 
-        {(bylaw.setback_meters !== null || bylaw.max_birds_residential !== null) && (
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            {bylaw.setback_meters !== null && (
-              <div className="rounded-xl border border-border/60 bg-background/60 p-3">
-                <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
-                  <RulerIcon className="h-3.5 w-3.5" /> Setback from neighbour
+        {checklist.length > 0 && (
+          <div className="mt-5 space-y-3 border-t border-border/60 pt-4">
+            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Before you start</p>
+            {checklist.map((item, i) => (
+              <div key={item.label} className="flex items-start gap-3">
+                <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-background text-xs font-medium text-foreground ring-1 ring-border">
+                  {i + 1}
+                </span>
+                <div>
+                  <p className="text-sm font-medium">{item.label}</p>
+                  <p className="text-xs text-muted-foreground">{item.detail}</p>
                 </div>
-                <p className="mt-1 font-display text-xl">{bylaw.setback_meters} m</p>
-                <p className="text-xs text-muted-foreground">Minimum coop distance advised</p>
               </div>
-            )}
-            {bylaw.max_birds_residential !== null && (
-              <div className="rounded-xl border border-border/60 bg-background/60 p-3">
-                <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
-                  <Scale className="h-3.5 w-3.5" /> Urban backyard cap
-                </div>
-                <p className="mt-1 font-display text-xl">{bylaw.max_birds_residential} birds</p>
-                <p className="text-xs text-muted-foreground">Advisory maximum</p>
-              </div>
-            )}
+            ))}
           </div>
         )}
 
@@ -281,10 +306,6 @@ function BylawCallout({
           <p className="mt-4 text-xs text-muted-foreground">
             Source: {bylaw.source_url}
           </p>
-        )}
-
-        {bylaw.notes && (
-          <p className="mt-2 text-xs text-muted-foreground italic">{bylaw.notes}</p>
         )}
       </div>
     );
@@ -302,25 +323,23 @@ function BylawCallout({
       </p>
 
       {nationalRegulations.length > 0 && (
-        <ul className="mt-4 grid gap-2 sm:grid-cols-2">
-          {nationalRegulations.map((reg) => (
-            <li
-              key={reg.id}
-              className="rounded-xl border border-border/60 bg-background/60 p-3"
-            >
-              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                {reg.category ?? "Regulation"}
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground italic">{reg.legal_instrument}</p>
-              {reg.requirement && (
-                <p className="mt-1 text-sm text-foreground/80 leading-relaxed">{reg.requirement}</p>
-              )}
-              {reg.source && (
-                <p className="mt-1 text-xs text-muted-foreground">{reg.source}</p>
-              )}
-            </li>
+        <div className="mt-5 space-y-3 border-t border-border/60 pt-4">
+          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Before you start</p>
+          {nationalRegulations.map((reg, i) => (
+            <div key={reg.id} className="flex items-start gap-3">
+              <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-background text-xs font-medium text-foreground ring-1 ring-border">
+                {i + 1}
+              </span>
+              <div>
+                <p className="text-sm font-medium">{reg.category ?? "Regulation"}</p>
+                {reg.requirement && <p className="text-xs text-muted-foreground">{reg.requirement}</p>}
+                <p className="mt-0.5 text-[11px] italic text-muted-foreground">
+                  {reg.legal_instrument}{reg.source ? ` · ${reg.source}` : ""}
+                </p>
+              </div>
+            </div>
           ))}
-        </ul>
+        </div>
       )}
     </div>
   );

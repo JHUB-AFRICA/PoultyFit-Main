@@ -32,6 +32,7 @@ function OnboardingPage() {
   const [county, setCounty] = useState<string>("Kiambu");
   const [ward, setWard] = useState("");
   const [poultryTypes, setPoultryTypes] = useState<PoultryType[]>(["chicken"]);
+  const [speciesRatio, setSpeciesRatio] = useState<Partial<Record<PoultryType, number>>>({});
   const [lengthM, setLengthM] = useState<number>(3);
   const [widthM, setWidthM] = useState<number>(2);
   const spaceM2 = Math.max(0, Math.round(lengthM * widthM));
@@ -53,7 +54,19 @@ function OnboardingPage() {
   }
 
   const togglePoultry = (id: PoultryType) => {
+    const wasActive = poultryTypes.includes(id);
     setPoultryTypes((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+    if (wasActive) {
+      setSpeciesRatio((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+    }
+  };
+
+  const setPriority = (id: PoultryType, value: number) => {
+    setSpeciesRatio((prev) => ({ ...prev, [id]: Math.max(1, Math.min(5, value)) }));
   };
 
   const finish = () => {
@@ -66,6 +79,7 @@ function OnboardingPage() {
       spaceM2, lengthM, widthM,
       budgetKes, housing, goal, experience, startingStage,
       poultryTypes,
+      speciesRatio: poultryTypes.length > 1 ? speciesRatio : undefined,
       createdAt: new Date().toISOString(),
     });
     toast.success("Yard saved. Here's your plan.");
@@ -74,7 +88,7 @@ function OnboardingPage() {
 
   const steps = [
     { title: "Where are you?", desc: "So we can apply your county's rules." },
-    { title: "Which birds do you want to keep?", desc: "Chicken, duck, turkey — pick all that apply." },
+    { title: "Which birds do you want to keep?", desc: "Chicken, duck, turkey, pick all that apply." },
     { title: "Your yard & budget", desc: "So we can size the flock to fit." },
     { title: "Your goal & experience", desc: "So we tune the advice." },
   ];
@@ -142,8 +156,46 @@ function OnboardingPage() {
                 })}
               </div>
               <p className="mt-4 text-xs text-muted-foreground">
-                You can raise more than one kind of bird — we'll adjust your plan for the mix.
+                You can raise more than one kind of bird, we'll adjust your plan for the mix.
               </p>
+              {poultryTypes.length > 1 && (
+                <div className="mt-4 space-y-3 rounded-xl border border-border bg-secondary/30 p-4">
+                  <p className="text-sm font-medium">How should we split your space and budget?</p>
+                  <p className="text-xs text-muted-foreground">
+                    Higher priority means more of your space and budget goes to that bird. Equal by default.
+                  </p>
+                  <div className="mt-2 space-y-2">
+                    {poultryTypes.map((id) => {
+                      const label = POULTRY_OPTIONS.find((p) => p.id === id)?.label ?? id;
+                      const value = speciesRatio[id] ?? 1;
+                      return (
+                        <div key={id} className="flex items-center justify-between gap-3">
+                          <span className="text-sm">{label}</span>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setPriority(id, value - 1)}
+                              disabled={value <= 1}
+                              className="flex h-7 w-7 items-center justify-center rounded-full border border-border text-sm hover:border-primary/50 disabled:opacity-40"
+                            >
+                              −
+                            </button>
+                            <span className="w-6 text-center text-sm font-medium">{value}</span>
+                            <button
+                              type="button"
+                              onClick={() => setPriority(id, value + 1)}
+                              disabled={value >= 5}
+                              className="flex h-7 w-7 items-center justify-center rounded-full border border-border text-sm hover:border-primary/50 disabled:opacity-40"
+                            >
+                              +
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

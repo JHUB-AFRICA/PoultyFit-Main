@@ -16,7 +16,7 @@ function Page() {
   return (
     <div>
       <ModuleHeader title="Feed plan" desc="Cheapest mix from local agrovets." />
-      <FeedPlanModule profile={profile} birds={feas?.recommended || 10} />
+      <FeedPlanModule profile={profile} bySpecies={feas?.bySpecies ?? null} fallbackBirds={10} />
     </div>
   );
 }

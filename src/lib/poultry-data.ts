@@ -1,6 +1,8 @@
 // Curated reference data used across modules. In a later phase this becomes
 // an API served from the platform's own backend (agrovet-integrated).
 
+import type { PoultryType } from "@/lib/auth";
+
 export const COUNTIES = [
   "Nairobi", "Kiambu", "Machakos", "Kajiado", "Nakuru", "Mombasa",
   "Kisumu", "Uasin Gishu", "Nyeri", "Meru", "Murang'a", "Kakamega",
@@ -8,26 +10,13 @@ export const COUNTIES = [
 
 export type CountyName = (typeof COUNTIES)[number];
 
-// Simplified indicative bylaws / advisory notes per county.
-// Real deployment: replace with authoritative county / ward data.
-export const COUNTY_BYLAWS: Record<string, {
-  urbanMaxBackyard: number;   // advisory max birds in urban backyard
-  requiresPermit: boolean;
-  setbackMeters: number;      // recommended distance from neighbour
-  note: string;
-}> = {
-  Nairobi:   { urbanMaxBackyard: 20, requiresPermit: true,  setbackMeters: 3, note: "Nairobi County requires a livestock permit for keeping poultry in residential zones." },
-  Kiambu:    { urbanMaxBackyard: 50, requiresPermit: false, setbackMeters: 2, note: "Peri-urban wards generally allow backyard flocks; keep coop clean to avoid nuisance complaints." },
-  Machakos:  { urbanMaxBackyard: 80, requiresPermit: false, setbackMeters: 2, note: "Rural wards are lenient; urban wards may require ward officer notification." },
-  Kajiado:   { urbanMaxBackyard: 60, requiresPermit: false, setbackMeters: 2, note: "Check with your ward administrator in Ongata Rongai / Kitengela estates." },
-  Nakuru:    { urbanMaxBackyard: 40, requiresPermit: true,  setbackMeters: 3, note: "Nakuru City by-laws require a livestock permit inside city boundary." },
-  Mombasa:   { urbanMaxBackyard: 15, requiresPermit: true,  setbackMeters: 4, note: "Coastal humidity increases disease risk; keep flock small in dense estates." },
-  Kisumu:    { urbanMaxBackyard: 30, requiresPermit: true,  setbackMeters: 3, note: "Kisumu City requires notification; rural sub-counties are open." },
-  "Uasin Gishu": { urbanMaxBackyard: 80, requiresPermit: false, setbackMeters: 2, note: "Generally open; Eldoret CBD estates may restrict." },
-  Nyeri:     { urbanMaxBackyard: 60, requiresPermit: false, setbackMeters: 2, note: "Most sub-counties allow backyard poultry." },
-  Meru:      { urbanMaxBackyard: 80, requiresPermit: false, setbackMeters: 2, note: "Open in most wards." },
-  "Murang'a":{ urbanMaxBackyard: 80, requiresPermit: false, setbackMeters: 2, note: "Open in most wards." },
-  Kakamega:  { urbanMaxBackyard: 80, requiresPermit: false, setbackMeters: 2, note: "Open in most wards." },
+export const POULTRY_LABEL: Record<PoultryType, string> = {
+  chicken: "Chicken",
+  duck: "Duck",
+  turkey: "Turkey",
+  goose: "Goose",
+  quail: "Quail",
+  "guinea-fowl": "Guinea fowl",
 };
 
 // Space requirement per bird (m²) depending on housing type.
@@ -38,7 +27,7 @@ export const SPACE_PER_BIRD: Record<string, number> = {
   "free-range":    1.0,
 };
 
-// Startup cost per bird (KES) by starting stage — day-old chick + brooder share is
+// Startup cost per bird (KES) by starting stage, day-old chick + brooder share is
 // cheapest; growers cost more (already fed for weeks); point-of-lay pullets cost the
 // most but start producing immediately. Reasonable Kenyan agrovet gaps (2025).
 export const STARTUP_COST_PER_BIRD: Record<BirdStage, number> = {
@@ -47,7 +36,7 @@ export const STARTUP_COST_PER_BIRD: Record<BirdStage, number> = {
   layer:  850,
 };
 
-// Feed ingredients — indicative Kenyan agrovet prices (KES per kg)
+// Feed ingredients, indicative Kenyan agrovet prices (KES per kg)
 export interface FeedIngredient {
   id: string;
   name: string;
@@ -73,32 +62,74 @@ export const STAGE_TARGET: Record<BirdStage, { protein: number; gramsPerBirdDay:
   layer:  { protein: 17, gramsPerBirdDay: 120 },
 };
 
-// Sample vet & agrovet directory. In later phase this is served from partner-integrated backend.
-export interface VetContact {
-  id: string;
-  name: string;
-  kind: "vet" | "agrovet";
-  county: string;
-  lat: number;
-  lng: number;
-  phone: string;
-  services: string[];
-}
+// Space a bird of this species needs, relative to a chicken, at the same
+// housing type. A chicken at 1.0 is the baseline SPACE_PER_BIRD figure above;
+// other species multiply it. Turkeys and geese are much bigger birds and need
+// real room; quail need almost none.
+export const SPECIES_SPACE_MULTIPLIER: Record<PoultryType, number> = {
+  chicken: 1.0,
+  duck: 1.3,
+  turkey: 2.5,
+  goose: 3.0,
+  quail: 0.15,
+  "guinea-fowl": 1.0,
+};
 
-export const VET_DIRECTORY: VetContact[] = [
-  { id: "v1", name: "Juja Farmers Vet Clinic", kind: "vet", county: "Kiambu", lat: -1.1018, lng: 37.0144, phone: "+254 720 111 001", services: ["Vaccination", "Deworming", "Post-mortem"] },
-  { id: "v2", name: "Thika Livestock Vet", kind: "vet", county: "Kiambu", lat: -1.0396, lng: 37.0900, phone: "+254 720 111 002", services: ["Vaccination", "Emergency call-out"] },
-  { id: "v3", name: "Kasarani Agrovet & Vet", kind: "vet", county: "Nairobi", lat: -1.2226, lng: 36.8965, phone: "+254 720 111 003", services: ["Poultry drugs", "Consultation"] },
-  { id: "a1", name: "Farmers Choice Agrovet — Ruiru", kind: "agrovet", county: "Kiambu", lat: -1.1436, lng: 36.9614, phone: "+254 720 222 001", services: ["Feeds", "Vaccines", "Chicks"] },
-  { id: "a2", name: "Kenchic Distributor — Kikuyu", kind: "agrovet", county: "Kiambu", lat: -1.2464, lng: 36.6636, phone: "+254 720 222 002", services: ["Day-old chicks", "Feeds"] },
-  { id: "a3", name: "Sigma Feeds Agrovet — Kitengela", kind: "agrovet", county: "Kajiado", lat: -1.4785, lng: 36.9598, phone: "+254 720 222 003", services: ["Feeds", "Equipment"] },
-  { id: "a4", name: "Unga Feeds Outlet — Nakuru", kind: "agrovet", county: "Nakuru", lat: -0.3031, lng: 36.0800, phone: "+254 720 222 004", services: ["Feeds", "Supplements"] },
-  { id: "v4", name: "Meru Poultry Vet", kind: "vet", county: "Meru", lat: 0.0472, lng: 37.6499, phone: "+254 720 111 004", services: ["Vaccination", "Consultation"] },
-  { id: "a5", name: "Kisumu Poultry Supplies", kind: "agrovet", county: "Kisumu", lat: -0.0917, lng: 34.7679, phone: "+254 720 222 005", services: ["Feeds", "Drugs"] },
-  { id: "v5", name: "Mombasa Coast Vet", kind: "vet", county: "Mombasa", lat: -4.0435, lng: 39.6682, phone: "+254 720 111 005", services: ["Consultation", "Emergency"] },
-];
+// Startup cost per bird (KES) by species and starting stage. Turkey and
+// guinea fowl figures are sourced from Kenyan farmer accounts (2020-2026
+// reporting); chicken is the existing agrovet-price baseline. Duck, goose,
+// and quail figures are estimates, no solid Kenya-specific sourcing was
+// found for those three, flagged here so they're not mistaken for the same
+// confidence level as the sourced ones.
+export const SPECIES_STARTUP_COST_PER_BIRD: Record<PoultryType, Record<BirdStage, number>> = {
+  chicken: { chick: 180, grower: 500, layer: 850 },
+  duck: { chick: 220, grower: 550, layer: 900 }, // estimate
+  turkey: { chick: 550, grower: 2500, layer: 5000 }, // sourced: poult ~500-600, mature ~5000
+  goose: { chick: 550, grower: 2500, layer: 4500 }, // estimate, geese are scarce in KE, limited data
+  quail: { chick: 30, grower: 80, layer: 150 }, // estimate
+  "guinea-fowl": { chick: 300, grower: 1000, layer: 2000 }, // sourced
+};
 
-// Symptom → condition category with rough weight.
+// Feed target (crude protein % and grams/bird/day) by species and stage.
+// Chicken values are the existing baseline. Other species genuinely need
+// different protein levels, a turkey or quail chick needs 24-28% starter
+// protein, well above a chicken's 20%, and eats a different daily volume.
+// These are standard poultry-nutrition reference ranges, not Kenya-specific
+// pricing, so they don't carry the same sourcing caveat as prices above.
+export const SPECIES_STAGE_TARGET: Record<PoultryType, Record<BirdStage, { protein: number; gramsPerBirdDay: number }>> = {
+  chicken: {
+    chick: { protein: 20, gramsPerBirdDay: 40 },
+    grower: { protein: 16, gramsPerBirdDay: 80 },
+    layer: { protein: 17, gramsPerBirdDay: 120 },
+  },
+  duck: {
+    chick: { protein: 20, gramsPerBirdDay: 60 },
+    grower: { protein: 16, gramsPerBirdDay: 110 },
+    layer: { protein: 16, gramsPerBirdDay: 150 },
+  },
+  turkey: {
+    chick: { protein: 28, gramsPerBirdDay: 60 },
+    grower: { protein: 22, gramsPerBirdDay: 150 },
+    layer: { protein: 16, gramsPerBirdDay: 250 },
+  },
+  goose: {
+    chick: { protein: 20, gramsPerBirdDay: 80 },
+    grower: { protein: 15, gramsPerBirdDay: 200 },
+    layer: { protein: 15, gramsPerBirdDay: 280 },
+  },
+  quail: {
+    chick: { protein: 24, gramsPerBirdDay: 8 },
+    grower: { protein: 20, gramsPerBirdDay: 15 },
+    layer: { protein: 18, gramsPerBirdDay: 22 },
+  },
+  "guinea-fowl": {
+    chick: { protein: 24, gramsPerBirdDay: 35 },
+    grower: { protein: 20, gramsPerBirdDay: 70 },
+    layer: { protein: 16, gramsPerBirdDay: 90 },
+  },
+};
+
+// Symptom, condition category with rough weight.
 export interface SymptomRule {
   id: string;
   label: string;
@@ -106,11 +137,11 @@ export interface SymptomRule {
 }
 
 export const CONDITIONS: Record<string, { name: string; urgency: "low" | "medium" | "high"; note: string }> = {
-  respiratory: { name: "Respiratory condition (e.g. Newcastle, IB, CRD)", urgency: "high", note: "Isolate affected birds. Do not treat blindly with antibiotics — see a vet for diagnosis." },
+  respiratory: { name: "Respiratory condition (e.g. Newcastle, IB, CRD)", urgency: "high", note: "Isolate affected birds. Do not treat blindly with antibiotics, see a vet for diagnosis." },
   digestive:   { name: "Digestive / parasitic (e.g. coccidiosis, worms)", urgency: "medium", note: "Improve litter hygiene and clean water. A vet or agrovet can confirm and dispense the correct dose." },
   nutritional: { name: "Nutritional deficiency", urgency: "low", note: "Review feed protein and calcium. Consider recalculating your feed plan." },
   external:    { name: "External parasites / stress", urgency: "low", note: "Check for mites, lice, overcrowding. Dust the coop and reduce stocking density." },
-  emergency:   { name: "Possible outbreak — urgent", urgency: "high", note: "Sudden deaths or drop in eggs of 30%+ needs a vet within 24 hours." },
+  emergency:   { name: "Possible outbreak, urgent", urgency: "high", note: "Sudden deaths or drop in eggs of 30%+ needs a vet within 24 hours." },
 };
 
 export const SYMPTOMS: SymptomRule[] = [

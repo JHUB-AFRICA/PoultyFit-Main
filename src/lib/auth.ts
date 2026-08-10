@@ -32,6 +32,9 @@ export interface FarmerProfile {
   experience: Experience;
   startingStage: StartingStage;
   poultryTypes: PoultryType[];
+  /** Relative priority weight per selected species, e.g. { chicken: 2, duck: 1 }.
+   *  Missing/empty means split evenly, same as a single-species profile. */
+  speciesRatio?: Partial<Record<PoultryType, number>>;
   createdAt: string;
 }
 
@@ -79,6 +82,7 @@ export function saveProfile(p: FarmerProfile) {
         experience: p.experience,
         starting_stage: p.startingStage,
         poultry_type_slugs: p.poultryTypes?.length ? p.poultryTypes : ["chicken"],
+        species_ratio: p.speciesRatio && Object.keys(p.speciesRatio).length ? p.speciesRatio : null,
       } as never,
       { onConflict: "user_id" },
     );
@@ -176,13 +180,23 @@ function toPoultryTypes(v: unknown): PoultryType[] {
   const valid = v.filter((x): x is PoultryType => (POULTRY_TYPE_VALUES as string[]).includes(x));
   return valid.length ? valid : ["chicken"];
 }
+function toSpeciesRatio(v: unknown): Partial<Record<PoultryType, number>> | undefined {
+  if (!v || typeof v !== "object") return undefined;
+  const out: Partial<Record<PoultryType, number>> = {};
+  for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
+    if ((POULTRY_TYPE_VALUES as string[]).includes(k) && typeof val === "number" && val > 0) {
+      out[k as PoultryType] = val;
+    }
+  }
+  return Object.keys(out).length ? out : undefined;
+}
 
 export async function hydrateProfileFromFarm(userId: string): Promise<FarmerProfile | null> {
   if (typeof window === "undefined") return null;
   if (getProfile()) return getProfile();
   const { data, error } = await (supabase
     .from("farms")
-    .select("county, sub_county, space_m2, length_m, width_m, budget_kes, housing, goal, experience, starting_stage, poultry_type_slugs")
+    .select("county, sub_county, space_m2, length_m, width_m, budget_kes, housing, goal, experience, starting_stage, poultry_type_slugs, species_ratio")
     .eq("user_id", userId)
     .maybeSingle() as unknown as Promise<{
       data: {
@@ -190,6 +204,7 @@ export async function hydrateProfileFromFarm(userId: string): Promise<FarmerProf
         length_m: number | null; width_m: number | null; budget_kes: number | null;
         housing: string | null; goal: string | null; experience: string | null;
         starting_stage: string | null; poultry_type_slugs: string[] | null;
+        species_ratio: unknown;
       } | null;
       error: { message: string } | null;
     }>);
@@ -206,6 +221,7 @@ export async function hydrateProfileFromFarm(userId: string): Promise<FarmerProf
     experience: isExperience(data.experience) ? data.experience : "first-time",
     startingStage: isStage(data.starting_stage) ? data.starting_stage : "chick",
     poultryTypes: toPoultryTypes(data.poultry_type_slugs),
+    speciesRatio: toSpeciesRatio(data.species_ratio),
     createdAt: new Date().toISOString(),
   };
   localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));

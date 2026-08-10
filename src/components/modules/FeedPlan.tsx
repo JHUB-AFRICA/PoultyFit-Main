@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
-import { computeFeedPlan } from "@/lib/poultry-calc";
+import { computeFeedPlan, type SpeciesBreakdown } from "@/lib/poultry-calc";
 import { getFeedIngredients, getFeedProducts, type FeedProduct } from "@/lib/feed.functions";
 import type { BirdStage, FeedIngredient } from "@/lib/poultry-data";
+import { POULTRY_LABEL } from "@/lib/poultry-data";
 import type { FarmerProfile, PoultryType } from "@/lib/auth";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
@@ -14,20 +15,23 @@ const STAGE_META: Record<BirdStage, { label: string; weeks: string; order: numbe
   layer:  { label: "Point-of-lay",weeks: "19+ wks",  order: 2 },
 };
 
-const POULTRY_LABEL: Record<PoultryType, string> = {
-  chicken: "Chicken",
-  duck: "Duck",
-  turkey: "Turkey",
-  goose: "Goose",
-  quail: "Quail",
-  "guinea-fowl": "Guinea fowl",
-};
-
-export function FeedPlanModule({ profile, birds }: { profile: FarmerProfile; birds: number }) {
+export function FeedPlanModule({
+  profile,
+  bySpecies,
+  fallbackBirds = 10,
+}: {
+  profile: FarmerProfile;
+  /** Per-species recommended bird counts from useFeasibilitySnapshot's result. */
+  bySpecies: SpeciesBreakdown[] | null;
+  /** Used only if bySpecies isn't available yet (still loading). */
+  fallbackBirds?: number;
+}) {
   const types: PoultryType[] = profile.poultryTypes?.length ? profile.poultryTypes : ["chicken"];
+  const birdsFor = (species: PoultryType): number =>
+    bySpecies?.find((b) => b.species === species)?.recommended ?? fallbackBirds;
 
   if (types.length === 1) {
-    return <SinglePoultryFeedView profile={profile} birds={birds} poultryType={types[0]} />;
+    return <SinglePoultryFeedView profile={profile} birds={birdsFor(types[0])} poultryType={types[0]} />;
   }
 
   return (
@@ -39,7 +43,7 @@ export function FeedPlanModule({ profile, birds }: { profile: FarmerProfile; bir
       </TabsList>
       {types.map((t) => (
         <TabsContent key={t} value={t} className="mt-6">
-          <SinglePoultryFeedView profile={profile} birds={birds} poultryType={t} />
+          <SinglePoultryFeedView profile={profile} birds={birdsFor(t)} poultryType={t} />
         </TabsContent>
       ))}
     </Tabs>
@@ -80,16 +84,16 @@ function SinglePoultryFeedView({
   const ingredientList: FeedIngredient[] = ingredients ?? [];
 
   const plan = useMemo(
-    () => computeFeedPlan(stage, Math.max(1, birds), ingredientList, profile.county),
-    [stage, birds, ingredientList, profile.county],
+    () => computeFeedPlan(stage, Math.max(1, birds), ingredientList, poultryType, profile.county),
+    [stage, birds, ingredientList, poultryType, profile.county],
   );
 
   const trajectory = useMemo(
     () => trajectoryStages.map((s) => ({
       stage: s,
-      plan: computeFeedPlan(s, Math.max(1, birds), ingredientList, profile.county),
+      plan: computeFeedPlan(s, Math.max(1, birds), ingredientList, poultryType, profile.county),
     })),
-    [trajectoryStages, birds, ingredientList, profile.county],
+    [trajectoryStages, birds, ingredientList, poultryType, profile.county],
   );
 
   const locationLabel = profile.ward?.trim() ? profile.ward.trim() : profile.county;
@@ -122,7 +126,7 @@ function SinglePoultryFeedView({
 
       {fellBack && (
         <div className="rounded-2xl border border-clay/40 bg-clay/5 p-4 text-sm">
-          No dedicated {POULTRY_LABEL[poultryType].toLowerCase()} feeds are stocked yet — showing
+          No dedicated {POULTRY_LABEL[poultryType].toLowerCase()} feeds are stocked yet, showing
           chicken feeds that keepers commonly use as a substitute.
         </div>
       )}

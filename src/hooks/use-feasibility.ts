@@ -5,13 +5,15 @@ import { useAuth } from "@/hooks/use-auth";
 import { getCountyBylaw } from "@/lib/bylaws.functions";
 import { getFeedIngredients } from "@/lib/feed.functions";
 import { computeFeasibility, feedCostPerBirdPerWeek, type FeasibilityResult } from "@/lib/poultry-calc";
+import type { PoultryType } from "@/lib/auth";
 
 /**
  * Pulls the signed-in farmer's profile, fetches their county bylaw and real
  * feed ingredient prices, and computes the feasibility result, the same
  * steps every dashboard page needs, now centralized so each route file
  * doesn't refetch/recompute it independently. The feed prices are what let
- * the budget constraint reserve real feed money, not just bird-stock cost.
+ * the budget constraint reserve real feed money, not just bird-stock cost,
+ * computed per selected species since each needs a different amount.
  */
 export function useFeasibilitySnapshot() {
   const { profile } = useAuth();
@@ -35,8 +37,14 @@ export function useFeasibilitySnapshot() {
 
   const feas = useMemo<FeasibilityResult | null>(() => {
     if (!profile) return null;
-    const weeklyFeed = ingredients ? feedCostPerBirdPerWeek(profile.startingStage, ingredients) : null;
-    return computeFeasibility(profile, bylaw?.countyBylaw ?? null, weeklyFeed);
+    const speciesList: PoultryType[] = profile.poultryTypes?.length ? profile.poultryTypes : ["chicken"];
+    const feedCosts: Partial<Record<PoultryType, number | null>> = {};
+    if (ingredients) {
+      for (const species of speciesList) {
+        feedCosts[species] = feedCostPerBirdPerWeek(profile.startingStage, ingredients, species);
+      }
+    }
+    return computeFeasibility(profile, bylaw?.countyBylaw ?? null, feedCosts);
   }, [profile, bylaw, ingredients]);
 
   return { profile, bylaw, feas, isLoading };
