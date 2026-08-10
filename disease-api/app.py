@@ -13,10 +13,9 @@ from typing import List, Optional
 import numpy as np
 import tensorflow as tf
 from PIL import Image
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import xgboost as xgb
 
 # ============================================================================
 # CONFIGURATION
@@ -34,6 +33,9 @@ SPECIES_ENCODER_PATH = os.path.join(MODEL_DIR, "species_encoder.pkl")
 METADATA_PATH = os.path.join(MODEL_DIR, "model_metadata.json")
 
 IMAGE_SIZE = (224, 224)  # Standard for Keras CNN
+
+# If set, /predict requires "Authorization: Bearer <API_KEY>". Leave unset locally.
+API_KEY = os.getenv("API_KEY")
 
 # ============================================================================
 # MODELS & DATA (loaded at startup)
@@ -58,6 +60,7 @@ models = {
     "symptom_list": None,
     "feature_names": None,
     "metadata": None,
+    "species_encoder": None,
 }
 
 
@@ -79,7 +82,12 @@ def load_models():
         # Load feature names for XGBoost input ordering
         with open(FEATURE_NAMES_PATH, "rb") as f:
             models["feature_names"] = pickle.load(f)
-        
+
+        # Load species encoder (turns "chicken"/"duck"/"quail"/"turkey" into the
+        # numeric value the "species" feature expects)
+        with open(SPECIES_ENCODER_PATH, "rb") as f:
+            models["species_encoder"] = pickle.load(f)
+
         # Load XGBoost symptoms model (pickled object)
         with open(SYMPTOMS_MODEL_PATH, "rb") as f:
             models["symptoms_model"] = pickle.load(f)
@@ -135,18 +143,27 @@ def preprocess_image(image_base64: str) -> np.ndarray:
         raise ValueError(f"Failed to process image: {e}")
 
 
-def prepare_symptoms_input(symptoms: List[str]) -> np.ndarray:
+def prepare_symptoms_input(symptoms: List[str], species: str) -> np.ndarray:
     """
-    Convert symptom names to a binary feature vector for XGBoost.
-    Order matches the model's feature_names.
+    Convert symptom names + species to a feature vector for XGBoost.
+    Order matches the model's feature_names. Symptom columns are binary;
+    the "species" column is label-encoded via species_encoder.pkl.
     """
     feature_names = models["feature_names"]
     feature_vector = np.zeros(len(feature_names))
-    
+    encoder = models["species_encoder"]
+
     for i, feature in enumerate(feature_names):
-        if feature in symptoms:
+        if feature == "species":
+            try:
+                feature_vector[i] = encoder.transform([species])[0]
+            except ValueError:
+                # Unknown species to the model (e.g. goose, guinea-fowl aren't
+                # in its training data) — fall back to "chicken" rather than 0.
+                feature_vector[i] = encoder.transform(["chicken"])[0]
+        elif feature in symptoms:
             feature_vector[i] = 1
-    
+
     return np.expand_dims(feature_vector, axis=0)  # Add batch dimension
 
 
@@ -210,13 +227,22 @@ def get_symptom_list():
     )
 
 
+def check_api_key(authorization: Optional[str]) -> None:
+    if not API_KEY:
+        return  # no key configured, e.g. local dev
+    expected = f"Bearer {API_KEY}"
+    if authorization != expected:
+        raise HTTPException(status_code=401, detail="Invalid or missing API key")
+
+
 @app.post("/predict", response_model=PredictionResult)
-def predict(request: PredictionRequest):
+def predict(request: PredictionRequest, authorization: Optional[str] = Header(default=None)):
     """
     Make a disease prediction based on symptoms and/or images.
     
     At least one of (symptoms, chicken_image, droppings_image) must be provided.
     """
+    check_api_key(authorization)
     if not models["metadata"]:
         raise HTTPException(status_code=503, detail="Models not loaded")
     
@@ -236,7 +262,7 @@ def predict(request: PredictionRequest):
     # ────────────────────────────────────────────────────────────────────
     if request.symptoms:
         try:
-            X = prepare_symptoms_input(request.symptoms)
+            X = prepare_symptoms_input(request.symptoms, request.species)
             symptom_proba = models["symptoms_model"].predict_proba(X)[0]
         except Exception as e:
             warnings.append(f"Symptoms model failed: {e}")
