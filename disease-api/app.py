@@ -12,6 +12,7 @@ from typing import List, Optional
 
 import numpy as np
 import tensorflow as tf
+import joblib
 from PIL import Image
 from fastapi import FastAPI, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
@@ -85,8 +86,7 @@ def load_models():
 
         # Load species encoder (turns "chicken"/"duck"/"quail"/"turkey" into the
         # numeric value the "species" feature expects)
-        with open(SPECIES_ENCODER_PATH, "rb") as f:
-            models["species_encoder"] = pickle.load(f)
+        models["species_encoder"] = joblib.load(SPECIES_ENCODER_PATH)
 
         # Load XGBoost symptoms model (pickled object)
         with open(SYMPTOMS_MODEL_PATH, "rb") as f:
