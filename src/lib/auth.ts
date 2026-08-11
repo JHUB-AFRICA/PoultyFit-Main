@@ -61,35 +61,48 @@ export function getCurrentUser(): AuthUser | null {
 export function getProfile(): FarmerProfile | null {
   return read<FarmerProfile | null>(PROFILE_KEY, null);
 }
-export function saveProfile(p: FarmerProfile) {
+/**
+ * Saves the profile to local cache immediately (so the UI feels instant),
+ * then mirrors it to Supabase. Returns whether the Supabase write actually
+ * succeeded, callers should check this and warn the user if it's false,
+ * rather than assuming a save always works.
+ */
+export async function saveProfile(p: FarmerProfile): Promise<{ synced: boolean; error?: string }> {
   localStorage.setItem(PROFILE_KEY, JSON.stringify(p));
   window.dispatchEvent(new Event("poultryfit-auth"));
-  // Fire-and-forget mirror to backend when signed in
   const u = getCurrentUser();
-  if (u) {
-    void supabase.from("farms").upsert(
-      {
-        user_id: u.id,
-        name: "My farm",
-        county: p.county,
-        sub_county: p.ward,
-        space_m2: p.spaceM2,
-        length_m: p.lengthM ?? null,
-        width_m: p.widthM ?? null,
-        budget_kes: p.budgetKes,
-        housing: p.housing,
-        goal: p.goal,
-        experience: p.experience,
-        starting_stage: p.startingStage,
-        poultry_type_slugs: p.poultryTypes?.length ? p.poultryTypes : ["chicken"],
-        species_ratio: p.speciesRatio && Object.keys(p.speciesRatio).length ? p.speciesRatio : null,
-      } as never,
-      { onConflict: "user_id" },
-    );
+  if (!u) return { synced: false, error: "Not signed in" };
+
+  const { error } = await supabase.from("farms").upsert(
+    {
+      user_id: u.id,
+      name: "My farm",
+      county: p.county,
+      sub_county: p.ward,
+      space_m2: p.spaceM2,
+      length_m: p.lengthM ?? null,
+      width_m: p.widthM ?? null,
+      budget_kes: p.budgetKes,
+      housing: p.housing,
+      goal: p.goal,
+      experience: p.experience,
+      starting_stage: p.startingStage,
+      poultry_type_slugs: p.poultryTypes?.length ? p.poultryTypes : ["chicken"],
+      species_ratio: p.speciesRatio && Object.keys(p.speciesRatio).length ? p.speciesRatio : null,
+    } as never,
+    { onConflict: "user_id" },
+  );
+
+  if (error) {
+    console.error("Failed to save farm profile to Supabase:", error.message);
+    return { synced: false, error: error.message };
   }
+  return { synced: true };
 }
 
-function toAuthUser(u: { id: string; email?: string | null; user_metadata?: Record<string, unknown> } | null): AuthUser | null {
+function toAuthUser(
+  u: { id: string; email?: string | null; user_metadata?: Record<string, unknown> } | null,
+): AuthUser | null {
   if (!u) return null;
   const meta = (u.user_metadata ?? {}) as Record<string, unknown>;
   const name = (meta.full_name as string) || (meta.name as string) || (u.email ?? "").split("@")[0];
@@ -111,7 +124,8 @@ export async function signUp(name: string, email: string, password: string): Pro
   });
   if (error) throw new Error(error.message);
   const user = toAuthUser(data.user);
-  if (!user) throw new Error("Sign up succeeded but no user returned. Check your email to confirm.");
+  if (!user)
+    throw new Error("Sign up succeeded but no user returned. Check your email to confirm.");
   writeCache(user);
   return user;
 }
@@ -174,7 +188,14 @@ const STAGE_VALUES: StartingStage[] = ["chick", "grower", "layer"];
 function isStage(v: unknown): v is StartingStage {
   return typeof v === "string" && (STAGE_VALUES as string[]).includes(v);
 }
-const POULTRY_TYPE_VALUES: PoultryType[] = ["chicken", "duck", "turkey", "goose", "quail", "guinea-fowl"];
+const POULTRY_TYPE_VALUES: PoultryType[] = [
+  "chicken",
+  "duck",
+  "turkey",
+  "goose",
+  "quail",
+  "guinea-fowl",
+];
 function toPoultryTypes(v: unknown): PoultryType[] {
   if (!Array.isArray(v)) return ["chicken"];
   const valid = v.filter((x): x is PoultryType => (POULTRY_TYPE_VALUES as string[]).includes(x));
@@ -196,18 +217,27 @@ export async function hydrateProfileFromFarm(userId: string): Promise<FarmerProf
   if (getProfile()) return getProfile();
   const { data, error } = await (supabase
     .from("farms")
-    .select("county, sub_county, space_m2, length_m, width_m, budget_kes, housing, goal, experience, starting_stage, poultry_type_slugs, species_ratio")
+    .select(
+      "county, sub_county, space_m2, length_m, width_m, budget_kes, housing, goal, experience, starting_stage, poultry_type_slugs, species_ratio",
+    )
     .eq("user_id", userId)
     .maybeSingle() as unknown as Promise<{
-      data: {
-        county: string | null; sub_county: string | null; space_m2: number | null;
-        length_m: number | null; width_m: number | null; budget_kes: number | null;
-        housing: string | null; goal: string | null; experience: string | null;
-        starting_stage: string | null; poultry_type_slugs: string[] | null;
-        species_ratio: unknown;
-      } | null;
-      error: { message: string } | null;
-    }>);
+    data: {
+      county: string | null;
+      sub_county: string | null;
+      space_m2: number | null;
+      length_m: number | null;
+      width_m: number | null;
+      budget_kes: number | null;
+      housing: string | null;
+      goal: string | null;
+      experience: string | null;
+      starting_stage: string | null;
+      poultry_type_slugs: string[] | null;
+      species_ratio: unknown;
+    } | null;
+    error: { message: string } | null;
+  }>);
   if (error || !data) return null;
   const profile: FarmerProfile = {
     county: data.county ?? "",
