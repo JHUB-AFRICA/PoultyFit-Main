@@ -123,6 +123,13 @@ export async function signUp(name: string, email: string, password: string): Pro
     },
   });
   if (error) throw new Error(error.message);
+  // Supabase deliberately doesn't return an error for a duplicate email,
+  // it returns a user object with an empty identities array instead, to
+  // avoid letting attackers probe which emails are registered. We can
+  // still detect this ourselves and give a real, actionable message.
+  if (data.user && data.user.identities && data.user.identities.length === 0) {
+    throw new Error("An account with this email already exists. Try signing in instead.");
+  }
   const user = toAuthUser(data.user);
   if (!user)
     throw new Error("Sign up succeeded but no user returned. Check your email to confirm.");
@@ -148,7 +155,17 @@ export async function updatePassword(newPassword: string): Promise<void> {
 export async function signIn(email: string, password: string): Promise<AuthUser> {
   email = email.trim().toLowerCase();
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) throw new Error(error.message);
+  if (error) {
+    // Supabase deliberately returns the same generic error whether the
+    // email doesn't exist or the password is wrong, so we can't tell
+    // those apart, but we can still nudge toward the likely fix.
+    if (error.message.toLowerCase().includes("invalid login credentials")) {
+      throw new Error(
+        "Incorrect email or password. If you haven't created an account yet, sign up instead.",
+      );
+    }
+    throw new Error(error.message);
+  }
   const user = toAuthUser(data.user);
   if (!user) throw new Error("Sign in failed.");
   writeCache(user);
@@ -212,10 +229,8 @@ function toSpeciesRatio(v: unknown): Partial<Record<PoultryType, number>> | unde
   return Object.keys(out).length ? out : undefined;
 }
 
-export async function hydrateProfileFromFarm(userId: string): Promise<FarmerProfile | null> {
-  if (typeof window === "undefined") return null;
-  if (getProfile()) return getProfile();
-  const { data, error } = await (supabase
+async function fetchFarmRow(userId: string) {
+  return supabase
     .from("farms")
     .select(
       "county, sub_county, space_m2, length_m, width_m, budget_kes, housing, goal, experience, starting_stage, poultry_type_slugs, species_ratio",
@@ -237,7 +252,30 @@ export async function hydrateProfileFromFarm(userId: string): Promise<FarmerProf
       species_ratio: unknown;
     } | null;
     error: { message: string } | null;
-  }>);
+  }>;
+}
+
+export async function hydrateProfileFromFarm(userId: string): Promise<FarmerProfile | null> {
+  if (typeof window === "undefined") return null;
+  if (getProfile()) return getProfile();
+
+  let { data, error } = await fetchFarmRow(userId);
+
+  if (error) {
+    // A real error (as opposed to "no row found") is often a transient
+    // session-not-fully-settled race right after an OAuth redirect, not
+    // genuine evidence the user has no profile. Log it and retry once
+    // before concluding that, so a real farmer isn't bounced back to
+    // onboarding just because the first query landed a beat too early.
+
+    console.error("hydrateProfileFromFarm: query failed, retrying once:", error.message);
+    await new Promise((r) => setTimeout(r, 500));
+    ({ data, error } = await fetchFarmRow(userId));
+    if (error) {
+      console.error("hydrateProfileFromFarm: retry also failed:", error.message);
+    }
+  }
+
   if (error || !data) return null;
   const profile: FarmerProfile = {
     county: data.county ?? "",
