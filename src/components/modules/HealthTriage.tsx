@@ -279,7 +279,7 @@ export function HealthTriageModule() {
             </div>
             {serverResult?.source === "stub" && (
               <div className="mt-3 rounded-md border border-clay/30 bg-clay/5 px-3 py-2 text-[11px] uppercase tracking-wider text-clay">
-                Model service unavailable, showing a keyword-based estimate instead.
+                Showing results from symptom list only. Add photos for a more accurate result.
               </div>
             )}
             {(chickenPhoto || droppingsPhoto) && (
